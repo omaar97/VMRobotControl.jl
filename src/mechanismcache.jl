@@ -10,7 +10,7 @@ abstract type AbstractFrameCache{T} end
 struct FrameKinematicsCache{T} <: AbstractFrameCache{T}
     transforms::Vector{Transform{T}}
     function FrameKinematicsCache{T}(Nframes) where T
-        transforms = Vector{Transform{T}}(undef, Nframes)
+        transforms = zeros(Transform{T}, Nframes)
         new{T}(transforms)
     end
 end
@@ -19,7 +19,7 @@ struct FrameJacobiansCache{T} <: AbstractFrameCache{T}
     transforms::Vector{Transform{T}}
     jacobians::Array{T, 3}
     function FrameJacobiansCache{T}(Nframes, NDOF) where T
-        transforms = Vector{Transform{T}}(undef, Nframes)
+        transforms = zeros(Transform{T}, Nframes)
         jacobians = zeros(T, 6, NDOF, Nframes)
         new{T}(transforms, jacobians)
     end
@@ -28,7 +28,7 @@ end
 struct FrameRBStatesCache{T} <: AbstractFrameCache{T}
     rbstates::Vector{RigidBodyState{T}}
     function FrameRBStatesCache{T}(Nframes) where T
-        rbstates = Vector{RigidBodyState{T}}(undef, Nframes)
+        rbstates = zeros(RigidBodyState{T}, Nframes)
         new{T}(rbstates)
     end
 end
@@ -37,7 +37,7 @@ struct FrameRBStatesJacobianCache{T} <: AbstractFrameCache{T}
     rbstates::Vector{RigidBodyState{T}}
     jacobians::Array{T, 3}
     function FrameRBStatesJacobianCache{T}(Nframes, NDOF) where T
-        rbstates = Vector{RigidBodyState{T}}(undef, Nframes)
+        rbstates = zeros(RigidBodyState{T}, Nframes)
         jacobians = zeros(T, 6, NDOF, Nframes)
         new{T}(rbstates, jacobians)
     end
@@ -48,9 +48,9 @@ struct FrameRBStatesWrenchesCache{T} <: AbstractFrameCache{T}
     forces::Vector{SVector{3, T}}
     torques::Vector{SVector{3, T}}
     function FrameRBStatesWrenchesCache{T}(Nframes) where T
-        rbstates = Vector{RigidBodyState{T}}(undef, Nframes)
-        forces = Vector{SVector{3, T}}(undef, Nframes)
-        torques = Vector{SVector{3, T}}(undef, Nframes)
+        rbstates = zeros(RigidBodyState{T}, Nframes)
+        forces = zeros(SVector{3, T}, Nframes)
+        torques = zeros(SVector{3, T}, Nframes)
         new{T}(rbstates, forces, torques)
     end
 end
@@ -99,7 +99,7 @@ struct MechKinematicsCache{T} <: MechanismCache{T}
     end
     function MechKinematicsCache{T}(NDOF, Nf, Nc) where T
         t = Base.RefValue{T}(0.0)
-        q = Vector{T}(undef, NDOF)
+        q = zeros(T, NDOF)
         fcache = FrameKinematicsCache{T}(Nf)
         ccache = CoordKinematicsCache{T}(Nc)
         MechKinematicsCache(t, q, fcache, ccache)
@@ -126,7 +126,7 @@ struct MechJacobiansCache{T} <: MechanismCache{T}
     end
     function MechJacobiansCache{T}(NDOF, Nf, Nc) where T
         t = Base.RefValue{T}(0.0)
-        q = Vector{T}(undef, NDOF)
+        q = zeros(T, NDOF)
         fcache = FrameJacobiansCache{T}(Nf, NDOF)
         ccache = CoordJacobiansCache{T}(Nc, NDOF)
         MechJacobiansCache(t, q, fcache, ccache)
@@ -160,9 +160,9 @@ struct MechRBStatesCache{T} <: MechanismCache{T}
     end
     function MechRBStatesCache{T}(NDOF, Nf, Nc) where T
         t = Base.RefValue{T}(0.0)
-        q = Vector{T}(undef, NDOF)
-        q̇ = Vector{T}(undef, NDOF)
-        q̈ = Vector{T}(undef, NDOF)
+        q = zeros(T, NDOF)
+        q̇ = zeros(T, NDOF)
+        q̈ = zeros(T, NDOF)
         gravity = Base.RefValue(zero(SVector{3, T}))
         fcache = FrameRBStatesCache{T}(Nf)
         ccache = CoordRBStatesCache{T}(Nc)
@@ -213,15 +213,15 @@ struct MechDynamicsCache{T} <: MechanismCache{T}
     end
     function MechDynamicsCache{T}(NDOF, Nf, Nc) where T
         t = Base.RefValue{T}(0.0)
-        q = Vector{T}(undef, NDOF)
-        q̇ = Vector{T}(undef, NDOF)
-        q̈ = Vector{T}(undef, NDOF)
-        u = Vector{T}(undef, NDOF)
+        q = zeros(T, NDOF)
+        q̇ = zeros(T, NDOF)
+        q̈ = zeros(T, NDOF)
+        u = zeros(T, NDOF)
         gravity = Base.RefValue(zero(SVector{3, T}))
         inertance_matrix = zeros(T, NDOF, NDOF)
         inertance_matrix_workspace = zeros(T, NDOF, NDOF)
-        generalized_force = Vector{T}(undef, NDOF)
-        generalized_force_workspace = Vector{T}(undef, NDOF)
+        generalized_force = zeros(T, NDOF)
+        generalized_force_workspace = zeros(T, NDOF)
         fcache = FrameRBStatesJacobianCache{T}(Nf, NDOF)
         ccache = CoordRBStatesJacobianCache{T}(Nc, NDOF)
         MechDynamicsCache(t, q, q̇, q̈, gravity, u, inertance_matrix, inertance_matrix_workspace,
@@ -265,10 +265,10 @@ struct MechRNECache{T} <: MechanismCache{T}
     end
     function MechRNECache{T}(NDOF, Nf, Nc) where T
         t = Base.RefValue{T}(0.0)
-        q = Vector{T}(undef, NDOF)
-        q̇ = Vector{T}(undef, NDOF)
-        q̈ = Vector{T}(undef, NDOF)
-        u = Vector{T}(undef, NDOF)
+        q = zeros(T, NDOF)
+        q̇ = zeros(T, NDOF)
+        q̈ = zeros(T, NDOF)
+        u = zeros(T, NDOF)
         gravity = Base.RefValue(zero(SVector{3, T}))
         generalized_force = Vector{T}(undef, NDOF)
         generalized_force_workspace = Vector{T}(undef, NDOF)
@@ -722,8 +722,8 @@ struct VMSKinematicsCache{T} <: VirtualMechanismSystemCache{T}
     end
     function VMSKinematicsCache{T}(NDOF_robot, NDOF_vm, Nf_robot, Nf_vm, Nc_robot, Nc_vm, Nc) where T
         t = Base.RefValue{T}(0.0)
-        qʳ = Vector{T}(undef, NDOF_robot)
-        qᵛ = Vector{T}(undef, NDOF_vm)
+        qʳ = zeros(T, NDOF_robot)
+        qᵛ = zeros(T, NDOF_vm)
         q = (qʳ, qᵛ)
         robot_frame_cache = FrameKinematicsCache{T}(Nf_robot)
         robot_coord_cache = CoordKinematicsCache{T}(Nc_robot)
@@ -802,20 +802,20 @@ struct VMSDynamicsCache{T} <: VirtualMechanismSystemCache{T}
     function VMSDynamicsCache{T}(NDOF_robot, NDOF_vm, Nf_robot, Nf_vm, Nc_robot, Nc_vm, Nc) where T
         t = Base.RefValue{T}(0.0)
         NDOF = NDOF_robot + NDOF_vm
-        q = (Vector{T}(undef, NDOF_robot), Vector{T}(undef, NDOF_vm))
-        q̇ = (Vector{T}(undef, NDOF_robot), Vector{T}(undef, NDOF_vm))
-        q̈ = (Vector{T}(undef, NDOF_robot), Vector{T}(undef, NDOF_vm))
-        u = (Vector{T}(undef, NDOF_robot), Vector{T}(undef, NDOF_vm))
+        q = (zeros(T, NDOF_robot), zeros(NDOF_vm))
+        q̇ = (zeros(T, NDOF_robot), zeros(NDOF_vm))
+        q̈ = (zeros(T, NDOF_robot), zeros(NDOF_vm))
+        u = (zeros(T, NDOF_robot), zeros(NDOF_vm))
         gravity = Base.RefValue(zero(SVector{3, T}))
         robot_frame_cache = FrameRBStatesJacobianCache{T}(Nf_robot, NDOF_robot)
         robot_coord_cache = CoordRBStatesJacobianCache{T}(Nc_robot, NDOF_robot)
         vm_frame_cache = FrameRBStatesJacobianCache{T}(Nf_vm, NDOF_vm)
         vm_coord_cache = CoordRBStatesJacobianCache{T}(Nc_vm, NDOF_vm)
         coord_cache = CoordRBStatesJacobianCache{T}(Nc, NDOF) # TODO generalize
-        inertance_matrix = (Matrix{T}(undef, NDOF_robot, NDOF_robot), Matrix{T}(undef, NDOF_vm, NDOF_vm))
+        inertance_matrix = (zeros(T, NDOF_robot, NDOF_robot), zeros(T, NDOF_vm, NDOF_vm))
         inertance_matrix_workspace = (Matrix{T}(undef, NDOF_robot, NDOF_robot), Matrix{T}(undef, NDOF_vm, NDOF_vm))
-        generalized_force = (Vector{T}(undef, NDOF_robot), Vector{T}(undef, NDOF_vm))
-        generalized_force_workspace = (Vector{T}(undef, NDOF_robot), Vector{T}(undef, NDOF_vm))
+        generalized_force = (zeros(T, NDOF_robot), zeros(T, NDOF_vm))
+        generalized_force_workspace = (zeros(T, NDOF_robot), zeros(T, NDOF_vm))
         new{T}(t, q, q̇, q̈, u, gravity, inertance_matrix, inertance_matrix_workspace, 
                generalized_force, generalized_force_workspace, robot_frame_cache,
                 vm_frame_cache, robot_coord_cache, vm_coord_cache, coord_cache)
