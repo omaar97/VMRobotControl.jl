@@ -44,6 +44,7 @@ VMRobotControlDifferentialEquationsExt = "DifferentialEquations"
 VMRobotControlMakieExt = "Makie"
 
 [compat]
+julia = "1.9"
 BenchmarkTools = "1"
 ColorTypes = "0.11, 0.12"
 Colors = "0.12, 0.13"
