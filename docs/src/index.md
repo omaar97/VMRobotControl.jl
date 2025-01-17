@@ -95,9 +95,7 @@ and [robot control for robotic surgery](https://doi.org/10.1016/j.ifacol.2023.10
 
 # Authors and Acknowledgements
 
-
-
-This package was initially developed during my PhD ([here is my website!](https://daniellarby.net/))
+I'm Daniel Larby. This package was initially developed during my PhD ([here is my website!](https://daniellarby.net/))
 at the Control Lab, in the Department of Engineering, University of Cambridge, CB2 1PZ, UK.
 
 I was supported by my supervisor, [Fulvio Forni](https://sites.google.com/site/fulvioforni/), and
