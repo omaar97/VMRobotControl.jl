@@ -66,7 +66,7 @@ test
 
 # Manually building documentation
 
-We recommend [reading the docs online](docs-dev-url), but you can also build 
+We recommend [reading the docs online][docs-dev-url], but you can also build 
 them locally. To do so, activate the docs environment, from the
 `VMRobotControl.jl` folder:
 ```
