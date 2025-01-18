@@ -210,12 +210,12 @@ animate_robot_odesolution(fig, sol, plotting_kcache, savepath; t=plotting_t, f_s
 ````
 
 ````
-"/home/daniel/code/VMRobotControl.jl/docs/src/assets/sciurus_reaching.mp4"
+"C:\\Users\\omaar\\OneDrive - ku.ac.ae\\Desktop\\AgriFoRwArdS\\PhD\\JuliaPackage\\VMRobotControl.jl\\docs/src/assets/sciurus_reaching.mp4"
 ````
 
 ```@raw html
 <video controls width="100%" height="auto" autoplay loop>
-<source src="assets/sciurus_reaching.mp4" type="video/mp4">
+<source src="../../assets/sciurus_reaching.mp4" type="video/mp4">
 </video>
 ```
 

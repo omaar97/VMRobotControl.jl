@@ -117,12 +117,12 @@ animate_robot_odesolution(fig, sol, cache, savepath; f_setup=animate_f_setup, f_
 ````
 
 ````
-"/home/daniel/code/VMRobotControl.jl/docs/src/assets/rail_robot.mp4"
+"C:\\Users\\omaar\\OneDrive - ku.ac.ae\\Desktop\\AgriFoRwArdS\\PhD\\JuliaPackage\\VMRobotControl.jl\\docs/src/assets/rail_robot.mp4"
 ````
 
 ```@raw html
 <video controls width="100%" height="auto" autoplay loop>
-<source src="assets/rail_robot.mp4" type="video/mp4">
+<source src="../../assets/rail_robot.mp4" type="video/mp4">
 </video>
 ```
 

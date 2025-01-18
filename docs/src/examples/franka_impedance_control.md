@@ -161,7 +161,7 @@ animate_robot_odesolution(fig, sol, plotting_kcache, savepath; t=plotting_t);
 
 ```@raw html
 <video controls width="100%" height="auto" autoplay loop>
-<source src="assets/franka_impedance_control.mp4" type="video/mp4">
+<source src="../../assets/franka_impedance_control.mp4" type="video/mp4">
 </video>
 ```
 

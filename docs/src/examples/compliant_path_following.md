@@ -107,11 +107,11 @@ end;
 
 ````
 ┌ Warning: lines is not supported
-└ @ DigitalAssetExchangeFormatIO ~/.julia/packages/DigitalAssetExchangeFormatIO/joSI4/src/parser.jl:127
+└ @ DigitalAssetExchangeFormatIO C:\Users\omaar\.julia\packages\DigitalAssetExchangeFormatIO\joSI4\src\parser.jl:127
 ┌ Warning: lines is not supported
-└ @ DigitalAssetExchangeFormatIO ~/.julia/packages/DigitalAssetExchangeFormatIO/joSI4/src/parser.jl:127
+└ @ DigitalAssetExchangeFormatIO C:\Users\omaar\.julia\packages\DigitalAssetExchangeFormatIO\joSI4\src\parser.jl:127
 ┌ Warning: lines is not supported
-└ @ DigitalAssetExchangeFormatIO ~/.julia/packages/DigitalAssetExchangeFormatIO/joSI4/src/parser.jl:127
+└ @ DigitalAssetExchangeFormatIO C:\Users\omaar\.julia\packages\DigitalAssetExchangeFormatIO\joSI4\src\parser.jl:127
 
 ````
 
@@ -268,7 +268,7 @@ animate_robot_odesolution(fig, sol, plotting_kcache, savepath; t=plotting_t);
 
 ```@raw html
 <video controls width="100%" height="auto" autoplay loop>
-<source src="../assets/compliant_path_following.mp4" type="video/mp4">
+<source src="../../assets/compliant_path_following.mp4" type="video/mp4">
 </video>
 ```
 
