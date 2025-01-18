@@ -1,4 +1,13 @@
-using Revise
+module_dir = joinpath(splitpath(Base.source_dir())[1:end-1])
+if pwd() != module_dir
+    @info "Changing directory to folder $(module_dir)"
+    cd(module_dir)
+end
+
+# Ensure that VMRobotControl is devved.
+using Pkg
+Pkg.develop(PackageSpec(path=pwd()))
+Pkg.instantiate()
 
 using 
     DifferentialEquations,

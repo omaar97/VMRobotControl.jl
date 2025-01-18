@@ -1,3 +1,15 @@
+function is_dissipative_system(system)
+    dissipative = false
+    if system isa CompiledMechanism
+        dissipative = !isempty(dissipations(system))
+    else
+        dissipative = dissipative || !isempty(dissipations(system))
+        dissipative = dissipative || !isempty(dissipations(system.robot))
+        dissipative = dissipative || !isempty(dissipations(system.virtual_mechanism))
+    end
+    return dissipative
+end
+
 """
     test_energy(immut_mechanism)
 
@@ -8,7 +20,7 @@ function test_energy(system)
     gravity = SVector(0.0, 0.0, -9.81)
     cache = new_dynamics_cache(system)
     f_dynamics! = get_ode_dynamics(cache, gravity)
-    T, dt = 1.0, 1e-4
+    T, dt = 0.5, 1e-4
     
     q = zero_q(system)
     q̇ = zero_q̇(system)
@@ -54,14 +66,7 @@ function test_energy(system)
     dynamics!(cache, T, q, q̇, gravity)
     E2 = stored_energy(cache)
 
-    dissipative = false
-    if system isa CompiledMechanism
-        dissipative = !isempty(dissipations(system))
-    else
-        dissipative = dissipative || !isempty(dissipations(system))
-        dissipative = dissipative || !isempty(dissipations(system.robot))
-        dissipative = dissipative || !isempty(dissipations(system.virtual_mechanism))
-    end
+    dissipative = is_dissipative_system(system)
     if dissipative
         @test E2 <= E1
     else

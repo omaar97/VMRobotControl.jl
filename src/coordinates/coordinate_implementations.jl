@@ -283,11 +283,15 @@ end
 
 function __jacobian!(cache::CacheBundle, mc::CMC{<:FramePoint})
     c = mc.coord_data
-    Jz = _vms_jacobian_result_view(cache, J_cache_view(cache, mc), c.frameID)
+    J_view = J_cache_view(cache, mc)
+
+    fill!(J_view, zero(eltype(J_view))) # TODO do this once rather than every time
+    Jz = _vms_jacobian_result_view(cache, J_view, c.frameID)
     Jᵥ⁰ᵃ = get_linear_jacobian(cache, c.frameID)
     Jω⁰ᵃ = get_angular_jacobian(cache, c.frameID)
     T⁰ᵃ = get_transform(cache, c.frameID)
     
+
     pᵃ = c.point
     R⁰ᵃ = rotor(T⁰ᵃ)
     δᵒ = rotate(R⁰ᵃ, pᵃ)
@@ -305,6 +309,7 @@ function __jacobian!(cache::CacheBundle, mc::CMC{<:FramePoint})
     for i in axes(Jz, 1), j in axes(Jz, 2)
         Jz[i, j] = Jᵥ⁰ᵃ[i, j] - skew_p[i, :]' * Jω⁰ᵃ[SVector(1, 2, 3), j]
     end
+
     nothing
 end
 

@@ -3,7 +3,7 @@ abstract type AbstractCoordinateCache{T} end
 struct CoordKinematicsCache{T} <: AbstractCoordinateCache{T}
     z::Vector{T}
     function CoordKinematicsCache{T}(Nc) where T
-        new{T}(Vector{T}(undef, Nc))
+        new{T}(zeros(T, Nc))
     end
 end
 
@@ -12,8 +12,8 @@ struct CoordJacobiansCache{T} <: AbstractCoordinateCache{T}
     J::Matrix{T}
     function CoordJacobiansCache{T}(Nc, NDOF) where T
         new{T}(
-            Vector{T}(undef, Nc),
-            Matrix{T}(undef, Nc, NDOF)
+            zeros(T, Nc),
+            zeros(T, Nc, NDOF)
         )
     end
 end
@@ -24,9 +24,9 @@ struct CoordRBStatesCache{T} <: AbstractCoordinateCache{T}
     z̈::Vector{T}
     function CoordRBStatesCache{T}(Nc) where T
         new{T}(
-            Vector{T}(undef, Nc),
-            Vector{T}(undef, Nc),
-            Vector{T}(undef, Nc)
+            zeros(T, Nc),
+            zeros(T, Nc),
+            zeros(T, Nc)
         )
     end
 end
@@ -38,10 +38,10 @@ struct CoordRBStatesJacobianCache{T} <: AbstractCoordinateCache{T}
     J::Matrix{T}
     function CoordRBStatesJacobianCache{T}(Nc, NDOF) where T
         new{T}(
-            Vector{T}(undef, Nc),
-            Vector{T}(undef, Nc),
-            Vector{T}(undef, Nc),
-            Matrix{T}(undef, Nc, NDOF)
+            zeros(T, Nc),
+            zeros(T, Nc),
+            zeros(T, Nc),
+            zeros(T, Nc, NDOF)
         )
     end
 end
@@ -53,10 +53,10 @@ struct CoordRBStatesWrenchesCache{T} <: AbstractCoordinateCache{T}
     f::Vector{T}
     function CoordRBStatesWrenchesCache{T}(Nc) where T
         new{T}(
-            Vector{T}(undef, Nc),
-            Vector{T}(undef, Nc),
-            Vector{T}(undef, Nc),
-            Vector{T}(undef, Nc)
+            zeros(T, Nc),
+            zeros(T, Nc),
+            zeros(T, Nc),
+            zeros(T, Nc)
         )
     end
 end
