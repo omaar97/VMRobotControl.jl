@@ -1,15 +1,9 @@
-if (dir = splitpath(pwd())[end]) != "test" # If we are not in the test directory, cd to it
-    if dir == "VMRobotControl.jl"
-        @info "Changing directory to ./test, and activating test environment"
-        cd("test")
-        using TestEnv
-        TestEnv.activate()
-    else
-        error("Not in correct directory for running tests. The current working directory is: '$(pwd())'. In this dir is: '$(readdir())'")
-    end
-end
-
 using Pkg
+
+## If running lots of tests, do this:
+# using TestEnv
+# TestEnv.activate("VMRobotControl")
+
 # TEST_ENZYME = "Enzyme" ∈ keys(Pkg.project().dependencies)
 TEST_ENZYME = false
 # TEST_ENZYME = true
@@ -66,27 +60,10 @@ function test_on_mechanisms(test, mechanisms::Vector)
     end
 end
 
-rsons = [
-    "inertia.rson",
-    "inerter.rson",
-    "pendulum.rson",
-    "robot.rson",
-    "simple3link.rson",
-    "planar_drill_guide.rson",
-    "franka_panda/pandaDremelMount.rson",
-    "franka_panda/pandaSurgical.rson",
-    "franka_panda/pandaSurgicalSystem.rson"
-]
-
-# urdfs = readdir("../URDFs/source")
-urdfs = [
-    "../URDFs/sciurus17_description/urdf/sciurus17.urdf",
-    "../URDFs/franka_description/urdfs/fr3.urdf"
-]
-
-# Walk dir
+module_path = joinpath(splitpath(dirname(pathof(VMRobotControl)))[1:end-1])
+# Walk dir to find all rsons
 rsons = String[]
-for (root, dirs, files) in walkdir("../RSONs")
+for (root, dirs, files) in walkdir(joinpath(module_path, "RSONs"))
     for file in files
         if endswith(file, ".rson")
             path = joinpath(root, file)
@@ -94,6 +71,12 @@ for (root, dirs, files) in walkdir("../RSONs")
         end
     end
 end
+
+urdfs = joinpath.((module_path,), ("URDFs",), [
+    "sciurus17_description/urdf/sciurus17.urdf",
+    "franka_description/urdfs/fr3.urdf"
+])
+
 
 systems = let 
     p = Progress(length(rsons) + length(urdfs); desc="Parsing robot files...", dt=0.1)

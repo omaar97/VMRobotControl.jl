@@ -1,6 +1,13 @@
 # VMRobotControl.jl
 
-![VMRobotControl.jl logo](docs/src/assets/Logo.svg)
+<div align="center">
+    <picture>
+      <source srcset="docs/src/assets/Logo.svg" >
+      <img alt="VMRobotControl.jl logo" src="docs/src/assets/Logo.svg" width="350">
+    </picture>
+</div>
+
+[![][docs-dev-img]][docs-dev-url]
 
 VMRobotControl allows you to build dynamic controllers for your robot as intuitive
 virtual mechanisms.
@@ -16,6 +23,9 @@ For a defined robot geometry, you can select specific *coordinates* and connect
 properties.
 This provides a simple way to program complex robot behaviour incrementally, from mechanical 
 primitives.
+
+[docs-dev-img]: https://img.shields.io/badge/Docs-dev-blue.svg
+[docs-dev-url]: https://cambridge-control-lab.github.io/VMRobotControl.jl/dev
 
 # Installation
 
@@ -56,7 +66,9 @@ test
 
 # Manually building documentation
 
-Activate the docs environment, from the VMRobotControl.jl folder:
+We recommend [reading the docs online][docs-dev-url], but you can also build 
+them locally. To do so, activate the docs environment, from the
+`VMRobotControl.jl` folder:
 ```
 activate docs
 add DifferentialEquations, Documenter, FileIO, ForwardDiff, GLMakie, Literate, LiveServer, MeshIO, StaticArrays
@@ -67,5 +79,5 @@ include("./docs/make.jl")
 ```
 and host them using `LiveServer.jl`:
 ```julia
-include("./docs/make.jl")
+include("./docs/host.jl")
 ```
