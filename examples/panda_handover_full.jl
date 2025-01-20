@@ -1,12 +1,10 @@
-using DifferentialEquations
+#using DifferentialEquations
 using GeometryBasics: Vec3f, Point3f
-using GLMakie
 using LinearAlgebra
 using MeshIO
 using StaticArrays
 using VMRobotControl
 using FileIO, UUIDs
-using Pkg; Pkg.activate("VMRobotControlEnv"; shared=true)
 using Printf
 using Sockets
 using .Threads
@@ -15,7 +13,6 @@ using VMRobotControl:
     DEFAULT_F_SETUP,
     DEFAULT_F_CONTROL,
     robot_ndof
-
 
 ROSPY_LISTEN_PORT = 25342
 
@@ -63,7 +60,7 @@ struct ROSPyClientConnection
     # State
     status::ROSPyConnectionStatus
     # Async tasks/buffers for sending/receiving data on UPD/TCP sockets
-    stop::Atomic{Bool}
+    stop::Threads.Atomic{Bool}
     recv_tcp_task::Task
     recv_tcp_lock::ReentrantLock
     tcp_buffer::IOBuffer
@@ -179,8 +176,8 @@ function _cleanup!(connection::ROSPyClientConnection)
     connection
 end
 
-function with_rospy_connection(f::Function, rospy_ip, rospy_port, num_torques::Int, num_states::Int)
-    connection = _connect(rospy_ip, rospy_port, num_torques, num_states)
+function with_rospy_connection(f::Function, rospy_ip, rospy_port, num_torques::Int, num_states::Int, num_targets::Int)
+    connection = _connect(rospy_ip, rospy_port, num_torques, num_states, num_targets)
     try
         f(connection)
     finally
@@ -459,60 +456,60 @@ with_rospy_connection(Sockets.localhost, ROSPY_LISTEN_PORT, 7, 14, 3) do connect
     ros_vm_controller(connection, cvms, qᵛ; f_control, f_setup, E_max=2.0)
 end
 
-tspan = (0., 20π)
-dcache = new_dynamics_cache(compile(vms))
-q = ([0.0, 0.3, 0.0, -1.8, 0.0, π/2, 0.0], Float64[])
-q̇ = zero_q̇(dcache.vms)
-g = VMRobotControl.DEFAULT_GRAVITY
-prob = get_ode_problem(dcache, g, q, q̇, tspan)
-@info "Simulating robot handover sample."
-sol = solve(prob, Tsit5(); maxiters=1e5, abstol=1e-3, reltol=1e-3); # Low tol to speed up simulation
+# tspan = (0., 20π)
+# dcache = new_dynamics_cache(compile(vms))
+# q = ([0.0, 0.3, 0.0, -1.8, 0.0, π/2, 0.0], Float64[])
+# q̇ = zero_q̇(dcache.vms)
+# g = VMRobotControl.DEFAULT_GRAVITY
+# prob = get_ode_problem(dcache, g, q, q̇, tspan)
+# @info "Simulating robot handover sample."
+# sol = solve(prob, Tsit5(); maxiters=1e5, abstol=1e-3, reltol=1e-3); # Low tol to speed up simulation
 
-# ## Plotting
-# We create a figure with two scenes, for two different camera angles. We plot the robot, the
-# targets, the TCPs, and the obstacles in the scene.
-# We use observables for the time and the kinematics cache, which will be updated in the function
-# `animate_robot_odesolution`, causing any plots that depend upon these observables to be updated.
-fig = Figure(size = (720, 720), figure_padding=0)
-display(fig)
-ls = LScene(fig[1, 1]; show_axis=false)
-cam = cam3d!(ls, camera=:perspective, center=false)
-cam.lookat[] = [0., 0., 0.3]
-cam.eyeposition[] = [1.5, 0., 0.3]
-plotting_t = Observable(0.0)
-plotting_kcache = Observable(new_kinematics_cache(compile(vms)))
+# # ## Plotting
+# # We create a figure with two scenes, for two different camera angles. We plot the robot, the
+# # targets, the TCPs, and the obstacles in the scene.
+# # We use observables for the time and the kinematics cache, which will be updated in the function
+# # `animate_robot_odesolution`, causing any plots that depend upon these observables to be updated.
+# fig = Figure(size = (720, 720), figure_padding=0)
+# display(fig)
+# ls = LScene(fig[1, 1]; show_axis=false)
+# cam = cam3d!(ls, camera=:perspective, center=false)
+# cam.lookat[] = [0., 0., 0.3]
+# cam.eyeposition[] = [1.5, 0., 0.3]
+# plotting_t = Observable(0.0)
+# plotting_kcache = Observable(new_kinematics_cache(compile(vms)))
 
-target_scatter_kwargs = (;
-    color=:green, 
-    marker=:+, 
-    markersize=15, 
-    label="Targets",
-    transparency=true ## Avoid ugly white outline artefact on markers
-)
-tcp_scatter_kwargs = (;
-    color=:blue, 
-    marker=:x, 
-    markersize=15, 
-    label="TCPs",
-    transparency=true ## Avoid ugly white outline artefact on markers
-)
+# target_scatter_kwargs = (;
+#     color=:green, 
+#     marker=:+, 
+#     markersize=15, 
+#     label="Targets",
+#     transparency=true ## Avoid ugly white outline artefact on markers
+# )
+# tcp_scatter_kwargs = (;
+#     color=:blue, 
+#     marker=:x, 
+#     markersize=15, 
+#     label="TCPs",
+#     transparency=true ## Avoid ugly white outline artefact on markers
+# )
 
 
-## Show robot
-robotvisualize!(ls, plotting_kcache;)
-#robotsketch!(ls, plotting_kcache, scale=0.3, linewidth=2.5, transparency=true)
+# ## Show robot
+# robotvisualize!(ls, plotting_kcache;)
+# #robotsketch!(ls, plotting_kcache, scale=0.3, linewidth=2.5, transparency=true)
 
-## Label target and TCP
-target_1_pos_id = get_compiled_coordID(plotting_kcache[], ".virtual_mechanism.LeftFingerTarget")
-target_2_pos_id = get_compiled_coordID(plotting_kcache[], ".virtual_mechanism.RightFingerTarget")
-target_3_pos_id = get_compiled_coordID(plotting_kcache[], ".virtual_mechanism.HandBaseTarget")
+# ## Label target and TCP
+# target_1_pos_id = get_compiled_coordID(plotting_kcache[], ".virtual_mechanism.LeftFingerTarget")
+# target_2_pos_id = get_compiled_coordID(plotting_kcache[], ".virtual_mechanism.RightFingerTarget")
+# target_3_pos_id = get_compiled_coordID(plotting_kcache[], ".virtual_mechanism.HandBaseTarget")
 
-l_tcp_pos_id = get_compiled_coordID(plotting_kcache[], ".robot.LeftFinger")
-r_tcp_pos_id = get_compiled_coordID(plotting_kcache[], ".robot.RightFinger")
-h_tcp_pos_id = get_compiled_coordID(plotting_kcache[], ".robot.HandBase")
+# l_tcp_pos_id = get_compiled_coordID(plotting_kcache[], ".robot.LeftFinger")
+# r_tcp_pos_id = get_compiled_coordID(plotting_kcache[], ".robot.RightFinger")
+# h_tcp_pos_id = get_compiled_coordID(plotting_kcache[], ".robot.HandBase")
 
-scatter!(ls, plotting_kcache, [target_1_pos_id, target_2_pos_id, target_3_pos_id]; target_scatter_kwargs...)
-scatter!(ls, plotting_kcache, [l_tcp_pos_id, r_tcp_pos_id, h_tcp_pos_id]; tcp_scatter_kwargs...)
+# scatter!(ls, plotting_kcache, [target_1_pos_id, target_2_pos_id, target_3_pos_id]; target_scatter_kwargs...)
+# scatter!(ls, plotting_kcache, [l_tcp_pos_id, r_tcp_pos_id, h_tcp_pos_id]; tcp_scatter_kwargs...)
 
-savepath = joinpath(module_path, "docs/src/assets/random_trial.mp4")
-animate_robot_odesolution(fig, sol, plotting_kcache, savepath; t=plotting_t, fastforward=1.0, fps=20)
+# savepath = joinpath(module_path, "docs/src/assets/random_trial.mp4")
+# animate_robot_odesolution(fig, sol, plotting_kcache, savepath; t=plotting_t, fastforward=1.0, fps=20)
