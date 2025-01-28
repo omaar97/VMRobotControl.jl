@@ -209,6 +209,7 @@ def forward_state_to_julia(socket_manager, ros_manager):
     socket_manager.send_robot_state(time.time_ns(), msg_vec) # Send to julia
 
 def send_recv_send_recv_wait(socket_manager, ros_manager, set_zero=False):
+    print(ros_manager.new_msg.position)
     if ros_manager.new_msg is not None: # New msg received from ROS subscriber
         forward_state_to_julia(socket_manager, ros_manager)
     command = socket_manager.recv_joint_command() 
@@ -305,6 +306,7 @@ if __name__ == '__main__':
                         raise Exception(f"Invalid state: {state}")
                 except Exception as e:
                     print(f"Unhandled Exception: {e}")
+                    time.sleep(0.2)
                 if not args.auto_restart:
                     break
         if not args.auto_restart:

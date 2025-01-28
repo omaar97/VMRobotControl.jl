@@ -1,5 +1,6 @@
-#using DifferentialEquations
+using DifferentialEquations
 using GeometryBasics: Vec3f, Point3f
+using GLMakie
 using LinearAlgebra
 using MeshIO
 using StaticArrays
@@ -7,7 +8,10 @@ using VMRobotControl
 using FileIO, UUIDs
 using Printf
 using Sockets
-using .Threads
+using StaticArrays
+using .Threads 
+using VMRobotControl
+
 using VMRobotControl:
     DEFAULT_GRAVITY,
     DEFAULT_F_SETUP,
@@ -82,7 +86,7 @@ struct ROSPyClientConnection
         # Each "target" is a 3D position (x,y,z)
         status = ROSPyConnectionStatus(0, 0, 0, RobotStatePacket(0, 0, zeros(num_states)), TargetPosPacket(zeros(3*num_targets)))
         # Start a task to receive commands on the tcp socket
-        stop = Atomic{Bool}(false)
+        stop = Threads.Atomic{Bool}(false)
         recv_tcp_lock = ReentrantLock()
         tcp_buffer = PipeBuffer()
         recv_tcp_task = @async begin
@@ -219,13 +223,15 @@ function check_udp(connection::ROSPyClientConnection)
     elseif istaskdone(connection.recv_udp_task)
         error("UDP data socket closed")
     end
+    
     # Then check if we received a packet on the data socket
     Base.@lock connection.status_lock begin
+    #print(connection.status.last_received.timestamp)
         if connection.status.last_received.sequence_number > connection.status.sequence_number
             return _get_new_packet_to_process!(connection, connection.status.last_received)
         else
             # @debug "No new UDP message to process"
-            return nothing
+            return (nothing, nothing)
         end
     end
 end
@@ -274,7 +280,7 @@ function loop_warmup(connection::ROSPyClientConnection, control_func!::Function)
         if time() - start_time > 1.0
             write(connection.command_socket, "$WARMUP_DONE\n")
             return STATE_ACTIVE
-        end
+        end   
     end
 end
 
@@ -325,17 +331,18 @@ function warmup_and_activate(connection::ROSPyClientConnection, control_func!::F
     end
 end
 
-function get_initial_state(connection; retries=20, sleep_time=0.2, max_initial_state_age)
+function get_initial_state(connection; retries=100, sleep_time=0.2, max_initial_state_age)
     for i = 1:retries
         Base.@lock connection.status_lock begin
             if connection.status.last_received.sequence_number > 0
                 initial_state = deepcopy(connection.status.last_received)
+                targets_state = deepcopy(connection.status.target_pos_received)
                 t_ns = my_time_ns()           
                 if (t_ns - initial_state.timestamp)/1e9 > max_initial_state_age 
                     println("Initial state is too old, $((t_ns - initial_state.timestamp)/1e9)... retrying")
                     # Ensure the state is recent
                 else
-                    return initial_state
+                    return (targets_state, initial_state)
                 end
             end
         end
@@ -357,10 +364,11 @@ function ros_vm_controller(
     # Create cache
     control_cache = new_control_cache(vms, qᵛ, gravity)
     let # Set initial joint state in cache
-        state = get_initial_state(connection; max_initial_state_age)
+        target_positions, state = get_initial_state(connection; max_initial_state_age)
         NDOF = robot_ndof(control_cache)
         qʳ = view(state.state, 1:NDOF)
         q̇ʳ = zeros(eltype(control_cache), NDOF)
+        target_positions_ = view(target_positions.target_pos, 1:9)
         control_step!(control_cache, 0.0, qʳ, q̇ʳ) # Step at t=0 to set initial state
     end
     
@@ -373,9 +381,9 @@ function ros_vm_controller(
             @assert length(state) == 2*NDOF
             qʳ = view(state, 1:NDOF)
             q̇ʳ = view(state, NDOF+1:2*NDOF)
-            target_positions = view(target_positions, 1:9) # 3 targets with 3 dimensions each (x,y,z)
+            target_positions_ = view(target_positions, 1:9) # 3 targets with 3 dimensions each (x,y,z)
             # Main control step
-            f_control(control_cache, target_positions, t, args, (dt, i)) # Call user control function
+            f_control(control_cache, target_positions_, t, args, (dt, i)) # Call user control function
             torques .= control_step!(control_cache, t, qʳ, q̇ʳ) # Get torques
             return false
         end
@@ -392,8 +400,10 @@ try
 catch
 end
 cfg = URDFParserConfig(;suppress_warnings=true) # This is just to hide warnings about unsupported URDF features
-module_path = joinpath(splitpath(splitdir(pathof(VMRobotControl))[1])[1:end-1])
-robot = parseURDF(joinpath(module_path, "URDFs/franka_description/urdfs/panda_with_gripper.urdf"), cfg)
+# module_path = joinpath(splitpath(splitdir(pathof(VMRobotControl))[1])[1:end-1])
+# module_path = pathof(VMRobotControl)
+# robot = parseURDF(joinpath(module_path, "URDFs/franka_description/urdfs/panda_with_gripper.urdf"), cfg)
+robot = parseURDF("URDFs/franka_description/urdfs/panda_with_gripper.urdf", cfg)
 
 joint_limits = cfg.joint_limits
 
@@ -415,29 +425,29 @@ add_coordinate!(robot, FrameOrigin("panda_hand"); id="HandBase")
 
 vms = VirtualMechanismSystem("RobotHandover", robot)
 vm = vms.virtual_mechanism
-add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.5,  0.5, 0.4))); id="LeftFingerTarget")
-add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.5, 0.42, 0.4))); id="RightFingerTarget")
-add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.5, 0.46, 0.5))); id="HandBaseTarget")
+add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.3, -0.44, 0.5))); id="LeftFingerTarget")
+add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.3, -0.36, 0.5))); id="RightFingerTarget")
+add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.3, -0.4, 0.612))); id="HandBaseTarget")
 
 add_coordinate!(vms, CoordDifference(".robot.LeftFinger", ".virtual_mechanism.LeftFingerTarget"); id="L pos error")
 add_coordinate!(vms, CoordDifference(".robot.RightFinger", ".virtual_mechanism.RightFingerTarget"); id="R pos error")
 add_coordinate!(vms, CoordDifference(".robot.HandBase", ".virtual_mechanism.HandBaseTarget"); id="H pos error")
 
-add_component!(vms, TanhSpring("L pos error"; max_force=10.0, stiffness=30.0); id="L spring")
-add_component!(vms, LinearDamper(10.0, "L pos error"); id="L damper")
-add_component!(vms, TanhSpring("R pos error"; max_force=10.0, stiffness=30.0); id="R spring")
-add_component!(vms, LinearDamper(10.0, "R pos error"); id="R damper")
-add_component!(vms, TanhSpring("H pos error"; max_force=10.0, stiffness=30.0); id="H spring")
-add_component!(vms, LinearDamper(10.0, "H pos error"); id="H damper")
+add_component!(vms, TanhSpring("L pos error"; max_force=10.0, stiffness=5000.0); id="L spring")
+add_component!(vms, LinearDamper(50.0, "L pos error"); id="L damper")
+add_component!(vms, TanhSpring("R pos error"; max_force=10.0, stiffness=5000.0); id="R spring")
+add_component!(vms, LinearDamper(50.0, "R pos error"); id="R damper")
+# add_component!(vms, TanhSpring("H pos error"; max_force=10.0, stiffness=1000.0); id="H spring")
+# add_component!(vms, LinearDamper(25.0, "H pos error"); id="H damper")
 # K = SMatrix{3, 3}(100., 0., 0., 0., 100., 0., 0., 0., 100.)
 # add_component!(vms, LinearSpring(K, "R pos error");       id="R spring")
 # add_component!(vms, LinearSpring(K, "L pos error");       id="L spring")
 # add_component!(vms, LinearSpring(K, "H pos error");       id="H spring")
 
 function f_setup(cache)
-    LeftFinger_coord_id = get_compiled_coordID(cache, "LeftFingerTarget")
-    RightFinger_coord_id = get_compiled_coordID(cache, "RightFingerTarget")
-    HandBase_coord_id = get_compiled_coordID(cache, "HandBaseTarget")
+    LeftFinger_coord_id = get_compiled_coordID(cache, ".virtual_mechanism.LeftFingerTarget")
+    RightFinger_coord_id = get_compiled_coordID(cache, ".virtual_mechanism.RightFingerTarget")
+    HandBase_coord_id = get_compiled_coordID(cache, ".virtual_mechanism.HandBaseTarget")
     return (LeftFinger_coord_id, RightFinger_coord_id, HandBase_coord_id)
 end
 
@@ -445,7 +455,7 @@ function f_control(cache, target_positions, t, setup_ret, extra)
     LeftFinger_coord_id, RightFinger_coord_id, HandBase_coord_id = setup_ret
     LeftFinger_coord = cache[LeftFinger_coord_id].coord_data.val[] = SVector(target_positions[1], target_positions[2], target_positions[3])
     RightFinger_coord = cache[RightFinger_coord_id].coord_data.val[] = SVector(target_positions[4], target_positions[5], target_positions[6])
-    HandBase_coord = cache[HandBase_coord_id].coord_data.val[] = SVector(target_positions[7], target_positions[8], target_positions[9])
+    # HandBase_coord = cache[HandBase_coord_id].coord_data.val[] = SVector(target_positions[7], target_positions[8], target_positions[9])
     nothing 
 end
 
@@ -453,7 +463,7 @@ cvms = compile(vms)
 
 qᵛ = Float64[]
 with_rospy_connection(Sockets.localhost, ROSPY_LISTEN_PORT, 7, 14, 3) do connection
-    ros_vm_controller(connection, cvms, qᵛ; f_control, f_setup, E_max=2.0)
+    ros_vm_controller(connection, cvms, qᵛ; f_control, f_setup, E_max=30.0)
 end
 
 # tspan = (0., 20π)

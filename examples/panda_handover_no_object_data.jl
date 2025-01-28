@@ -6,16 +6,38 @@ using MeshIO
 using StaticArrays
 using VMRobotControl
 using FileIO, UUIDs
-using Pkg; Pkg.activate("VMRobotControlEnv"; shared=true)
 using Printf
 using Sockets
-using .Threads
+using StaticArrays
+using .Threads 
+using VMRobotControl
+
 using VMRobotControl:
     DEFAULT_GRAVITY,
     DEFAULT_F_SETUP,
     DEFAULT_F_CONTROL,
     robot_ndof
 
+#===============================================================================
+# Model for communicating with ROS python client
+================================================================================
+There will be a ROSPY client and a Julia client. They will communicate over a 
+TCP connection for commands, and a UDP connection for data. The ROS client will
+listen on port 25342 for a TCP connection from Julia.
+
+The Julia client will have 2 states: 
+warmup => active
+
+The ROS client will have 4 states: 
+listening => warmup => active. 
+
+If everything is working correctly, the ROS client will transition through these
+states in order, upon receiving a "START", "WARMUP_DONE", or "STOP" message, 
+through the TCP command socket.
+
+If at any point an error occurs in Julia, a STOP message will be sent to the ROS
+client, which will return to the listening state.
+=#
 
 ROSPY_LISTEN_PORT = 25342
 
@@ -29,6 +51,13 @@ mutable struct RobotStatePacket
     sequence_number::UInt64
     state::Vector{Float64}
 end
+
+# mutable struct TorquePacket
+#     timestamp::UInt64
+#     sequence_number::UInt64
+#     torques::Vector{Float64}
+# end
+
 
 mutable struct ROSPyConnectionStatus
     sequence_number::UInt64
@@ -57,7 +86,7 @@ struct ROSPyClientConnection
     # State
     status::ROSPyConnectionStatus
     # Async tasks/buffers for sending/receiving data on UPD/TCP sockets
-    stop::Atomic{Bool}
+    stop::Threads.Atomic{Bool}
     recv_tcp_task::Task
     recv_tcp_lock::ReentrantLock
     tcp_buffer::IOBuffer
@@ -78,7 +107,7 @@ struct ROSPyClientConnection
         #
         status = ROSPyConnectionStatus(0, 0, 0, RobotStatePacket(0, 0, zeros(num_states)))
         # Start a task to receive commands on the tcp socket
-        stop = Atomic{Bool}(false)
+        stop = Threads.Atomic{Bool}(false)
         recv_tcp_lock = ReentrantLock()
         tcp_buffer = PipeBuffer()
         recv_tcp_task = @async begin
@@ -382,8 +411,9 @@ try
 catch
 end
 cfg = URDFParserConfig(;suppress_warnings=true) # This is just to hide warnings about unsupported URDF features
-module_path = joinpath(splitpath(splitdir(pathof(VMRobotControl))[1])[1:end-1])
-robot = parseURDF(joinpath(module_path, "URDFs/franka_description/urdfs/panda_with_gripper.urdf"), cfg)
+# module_path = joinpath(splitpath(splitdir(pathof(VMRobotControl))[1])[1:end-1])
+# robot = parseURDF(joinpath(module_path, "URDFs/franka_description/urdfs/panda_with_gripper.urdf"), cfg)
+robot = parseURDF("URDFs/franka_description/urdfs/panda_with_gripper.urdf", cfg)
 
 joint_limits = cfg.joint_limits
 
@@ -405,19 +435,19 @@ add_coordinate!(robot, FrameOrigin("panda_hand"); id="HandBase")
 
 vms = VirtualMechanismSystem("RobotHandover", robot)
 vm = vms.virtual_mechanism
-add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.5,  0.5, 0.4))); id="LeftFingerTarget")
-add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.5, 0.42, 0.4))); id="RightFingerTarget")
-add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.5, 0.46, 0.5))); id="HandBaseTarget")
+add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.5, -0.35, 0.5))); id="LeftFingerTarget")
+add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.5, -0.45, 0.5))); id="RightFingerTarget")
+add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.5, -0.4, 0.6))); id="HandBaseTarget")
 
 add_coordinate!(vms, CoordDifference(".robot.LeftFinger", ".virtual_mechanism.LeftFingerTarget"); id="L pos error")
 add_coordinate!(vms, CoordDifference(".robot.RightFinger", ".virtual_mechanism.RightFingerTarget"); id="R pos error")
 add_coordinate!(vms, CoordDifference(".robot.HandBase", ".virtual_mechanism.HandBaseTarget"); id="H pos error")
 
-add_component!(vms, TanhSpring("L pos error"; max_force=10.0, stiffness=30.0); id="L spring")
+add_component!(vms, TanhSpring("L pos error"; max_force=5.0, stiffness=10.0); id="L spring")
 add_component!(vms, LinearDamper(10.0, "L pos error"); id="L damper")
-add_component!(vms, TanhSpring("R pos error"; max_force=10.0, stiffness=30.0); id="R spring")
+add_component!(vms, TanhSpring("R pos error"; max_force=5.0, stiffness=10.0); id="R spring")
 add_component!(vms, LinearDamper(10.0, "R pos error"); id="R damper")
-add_component!(vms, TanhSpring("H pos error"; max_force=10.0, stiffness=30.0); id="H spring")
+add_component!(vms, TanhSpring("H pos error"; max_force=5.0, stiffness=10.0); id="H spring")
 add_component!(vms, LinearDamper(10.0, "H pos error"); id="H damper")
 # K = SMatrix{3, 3}(100., 0., 0., 0., 100., 0., 0., 0., 100.)
 # add_component!(vms, LinearSpring(K, "R pos error");       id="R spring")
@@ -425,17 +455,17 @@ add_component!(vms, LinearDamper(10.0, "H pos error"); id="H damper")
 # add_component!(vms, LinearSpring(K, "H pos error");       id="H spring")
 
 function f_setup(cache)
-    LeftFinger_coord_id = get_compiled_coordID(cache, "LeftFingerTarget")
-    RightFinger_coord_id = get_compiled_coordID(cache, "RightFingerTarget")
-    HandBase_coord_id = get_compiled_coordID(cache, "HandBaseTarget")
+    LeftFinger_coord_id = get_compiled_coordID(cache, ".virtual_mechanism.LeftFingerTarget")
+    RightFinger_coord_id = get_compiled_coordID(cache, ".virtual_mechanism.RightFingerTarget")
+    HandBase_coord_id = get_compiled_coordID(cache, ".virtual_mechanism.HandBaseTarget")
     return (LeftFinger_coord_id, RightFinger_coord_id, HandBase_coord_id)
 end
 
 function f_control(cache, t, setup_ret, extra)
     LeftFinger_coord_id, RightFinger_coord_id, HandBase_coord_id = setup_ret
-    LeftFinger_coord = cache[LeftFinger_coord_id].coord_data.val[] = SVector(0.3, .1 + 0.1*sin(t), 0.2)
-    RightFinger_coord = cache[RightFinger_coord_id].coord_data.val[] = SVector(0.3 + 0.1*cos(t), -.1, 0.2 + 0.1*sin(t))
-    HandBase_coord = cache[HandBase_coord_id].coord_data.val[] = SVector(0.3 + 0.1*cos(t), -.1, 0.2 + 0.1*sin(t))
+    # LeftFinger_coord = cache[LeftFinger_coord_id].coord_data.val[] = SVector(0.3, .1 + 0.1*sin(t), 0.2)
+    # RightFinger_coord = cache[RightFinger_coord_id].coord_data.val[] = SVector(0.3 + 0.1*cos(t), -.1, 0.2 + 0.1*sin(t))
+    # HandBase_coord = cache[HandBase_coord_id].coord_data.val[] = SVector(0.3 + 0.1*cos(t), -.1, 0.2 + 0.1*sin(t))
     nothing 
 end
 
@@ -443,63 +473,63 @@ cvms = compile(vms)
 
 qᵛ = Float64[]
 with_rospy_connection(Sockets.localhost, ROSPY_LISTEN_PORT, 7, 14) do connection
-    ros_vm_controller(connection, cvms, qᵛ; f_control, f_setup, E_max=2.0)
+    ros_vm_controller(connection, cvms, qᵛ; f_control, f_setup, E_max=10.0)
 end
 
-tspan = (0., 20π)
-dcache = new_dynamics_cache(compile(vms))
-q = ([0.0, 0.3, 0.0, -1.8, 0.0, π/2, 0.0], Float64[])
-q̇ = zero_q̇(dcache.vms)
-g = VMRobotControl.DEFAULT_GRAVITY
-prob = get_ode_problem(dcache, g, q, q̇, tspan)
-@info "Simulating robot handover sample."
-sol = solve(prob, Tsit5(); maxiters=1e5, abstol=1e-3, reltol=1e-3); # Low tol to speed up simulation
+# tspan = (0., 20π)
+# dcache = new_dynamics_cache(compile(vms))
+# q = ([0.0, 0.3, 0.0, -1.8, 0.0, π/2, 0.0], Float64[])
+# q̇ = zero_q̇(dcache.vms)
+# g = VMRobotControl.DEFAULT_GRAVITY
+# prob = get_ode_problem(dcache, g, q, q̇, tspan)
+# @info "Simulating robot handover sample."
+# sol = solve(prob, Tsit5(); maxiters=1e5, abstol=1e-3, reltol=1e-3); # Low tol to speed up simulation
 
 # ## Plotting
 # We create a figure with two scenes, for two different camera angles. We plot the robot, the
 # targets, the TCPs, and the obstacles in the scene.
 # We use observables for the time and the kinematics cache, which will be updated in the function
 # `animate_robot_odesolution`, causing any plots that depend upon these observables to be updated.
-fig = Figure(size = (720, 720), figure_padding=0)
-display(fig)
-ls = LScene(fig[1, 1]; show_axis=false)
-cam = cam3d!(ls, camera=:perspective, center=false)
-cam.lookat[] = [0., 0., 0.3]
-cam.eyeposition[] = [1.5, 0., 0.3]
-plotting_t = Observable(0.0)
-plotting_kcache = Observable(new_kinematics_cache(compile(vms)))
+# fig = Figure(size = (720, 720), figure_padding=0)
+# display(fig)
+# ls = LScene(fig[1, 1]; show_axis=false)
+# cam = cam3d!(ls, camera=:perspective, center=false)
+# cam.lookat[] = [0., 0., 0.3]
+# cam.eyeposition[] = [1.5, 0., 0.3]
+# plotting_t = Observable(0.0)
+# plotting_kcache = Observable(new_kinematics_cache(compile(vms)))
 
-target_scatter_kwargs = (;
-    color=:green, 
-    marker=:+, 
-    markersize=15, 
-    label="Targets",
-    transparency=true ## Avoid ugly white outline artefact on markers
-)
-tcp_scatter_kwargs = (;
-    color=:blue, 
-    marker=:x, 
-    markersize=15, 
-    label="TCPs",
-    transparency=true ## Avoid ugly white outline artefact on markers
-)
+# target_scatter_kwargs = (;
+#     color=:green, 
+#     marker=:+, 
+#     markersize=15, 
+#     label="Targets",
+#     transparency=true ## Avoid ugly white outline artefact on markers
+# )
+# tcp_scatter_kwargs = (;
+#     color=:blue, 
+#     marker=:x, 
+#     markersize=15, 
+#     label="TCPs",
+#     transparency=true ## Avoid ugly white outline artefact on markers
+# )
 
 
-## Show robot
-robotvisualize!(ls, plotting_kcache;)
-#robotsketch!(ls, plotting_kcache, scale=0.3, linewidth=2.5, transparency=true)
+# ## Show robot
+# robotvisualize!(ls, plotting_kcache;)
+# #robotsketch!(ls, plotting_kcache, scale=0.3, linewidth=2.5, transparency=true)
 
-## Label target and TCP
-target_1_pos_id = get_compiled_coordID(plotting_kcache[], ".virtual_mechanism.LeftFingerTarget")
-target_2_pos_id = get_compiled_coordID(plotting_kcache[], ".virtual_mechanism.RightFingerTarget")
-target_3_pos_id = get_compiled_coordID(plotting_kcache[], ".virtual_mechanism.HandBaseTarget")
+# ## Label target and TCP
+# target_1_pos_id = get_compiled_coordID(plotting_kcache[], ".virtual_mechanism.LeftFingerTarget")
+# target_2_pos_id = get_compiled_coordID(plotting_kcache[], ".virtual_mechanism.RightFingerTarget")
+# target_3_pos_id = get_compiled_coordID(plotting_kcache[], ".virtual_mechanism.HandBaseTarget")
 
-l_tcp_pos_id = get_compiled_coordID(plotting_kcache[], ".robot.LeftFinger")
-r_tcp_pos_id = get_compiled_coordID(plotting_kcache[], ".robot.RightFinger")
-h_tcp_pos_id = get_compiled_coordID(plotting_kcache[], ".robot.HandBase")
+# l_tcp_pos_id = get_compiled_coordID(plotting_kcache[], ".robot.LeftFinger")
+# r_tcp_pos_id = get_compiled_coordID(plotting_kcache[], ".robot.RightFinger")
+# h_tcp_pos_id = get_compiled_coordID(plotting_kcache[], ".robot.HandBase")
 
-scatter!(ls, plotting_kcache, [target_1_pos_id, target_2_pos_id, target_3_pos_id]; target_scatter_kwargs...)
-scatter!(ls, plotting_kcache, [l_tcp_pos_id, r_tcp_pos_id, h_tcp_pos_id]; tcp_scatter_kwargs...)
+# scatter!(ls, plotting_kcache, [target_1_pos_id, target_2_pos_id, target_3_pos_id]; target_scatter_kwargs...)
+# scatter!(ls, plotting_kcache, [l_tcp_pos_id, r_tcp_pos_id, h_tcp_pos_id]; tcp_scatter_kwargs...)
 
-savepath = joinpath(module_path, "docs/src/assets/random_trial.mp4")
-animate_robot_odesolution(fig, sol, plotting_kcache, savepath; t=plotting_t, fastforward=1.0, fps=20)
+# savepath = joinpath(module_path, "docs/src/assets/random_trial.mp4")
+# animate_robot_odesolution(fig, sol, plotting_kcache, savepath; t=plotting_t, fastforward=1.0, fps=20)

@@ -39,9 +39,11 @@ class ROSManager:
         self.joint_command_size = joint_command_size
         self.joint_state_size = joint_state_size
         self.joint_sub = Subscriber(subscriber_topic, JointState)
-        self.targets_sub = Subscriber(targets_subscriber_topic, Float64MultiArray)
-        self.sync = ApproximateTimeSynchronizer([self.joint_sub, self.targets_sub], queue_size=10, slop=0.1, allow_headerless = True)
-        self.sync.registerCallback(self._subscriber_callback)
+        rospy.Subscriber(subscriber_topic, JointState, self._subscriber_callback)
+        # self.targets_sub = Subscriber(targets_subscriber_topic, Float64MultiArray)
+        rospy.Subscriber(targets_subscriber_topic, Float64MultiArray, self._subscriber_callback_t)
+        # self.sync = ApproximateTimeSynchronizer([self.joint_sub, self.targets_sub], queue_size=100, slop=0.2, allow_headerless = True)
+        # self.sync.registerCallback(self._subscriber_callback)
         self.publisher = rospy.Publisher(publisher_topic, Float64MultiArray, queue_size=1)
         self.joint_command_message = Float64MultiArray()
         dim = MultiArrayDimension()
@@ -50,14 +52,24 @@ class ROSManager:
         dim.label = "joint_effort"
         self.joint_command_message.layout.dim.append(dim)
         self.joint_command_message.data = [0.0] * joint_command_size
-        self.rate = rospy.Rate(rate)
+        self.rate = rospy.Rate(rate) 
 
-    def _subscriber_callback(self, joint_msg, targets_msg):
+    # def _subscriber_callback(self, joint_msg, targets_msg):
+    #     assert self.joint_state_size%2 == 0 
+    #     assert len(joint_msg.position) == self.joint_state_size//2
+    #     assert len(joint_msg.velocity) == self.joint_state_size//2
+    #     assert len(targets_msg.data) == 3*self.targets_size
+    #     self.new_msg = joint_msg
+    #     self.new_targets_msg = targets_msg
+
+    def _subscriber_callback(self, joint_msg):
         assert self.joint_state_size%2 == 0 
         assert len(joint_msg.position) == self.joint_state_size//2
         assert len(joint_msg.velocity) == self.joint_state_size//2
-        assert len(targets_msg.data) == 3*self.targets_size
         self.new_msg = joint_msg
+
+    def _subscriber_callback_t(self, targets_msg):
+        assert len(targets_msg.data) == 3*self.targets_size
         self.new_targets_msg = targets_msg
 
         
@@ -81,6 +93,7 @@ class IPCManager:
     listen_port = None
     joint_command_size = None
     joint_state_size = None
+    targets_size = None
     # Constants
     torque_fmt = None
     state_fmt = None
@@ -102,7 +115,7 @@ class IPCManager:
         self.state_fmt = '!QQ' + 'd' * (joint_state_size + 3*targets_size)
 
     def __enter__(self):
-        print("Waiting for connection")
+        #print("Waiting for connection")
         self.command_socket = self._wait_for_connection()
         # Setup data socket
         (bound_ip, bound_port) = self.command_socket.getsockname()
@@ -178,6 +191,8 @@ class IPCManager:
             sequence_number, 
             *joint_state_vector
         )
+        # I am keeping the variable name as joint_state_vector but it contains the targets positions
+        # print(sequence_number)
         (remote_addr, remote_port) = self.command_socket.getpeername()
         result = self.send_data_socket.sendto(message, (remote_addr, remote_port))
         # Check if the entire packet was sent
@@ -187,8 +202,10 @@ class IPCManager:
 
     def send_robot_state(self, timestamp, joint_state_vector):
         # print(f"Sending packet with sequence number {self.sequence_number}")
+        #print(timestamp)
         self._send_robot_state(timestamp, self.sequence_number, joint_state_vector)
         self.sequence_number += 1
+
 
 
 ####################################################################################################
@@ -197,6 +214,7 @@ def loop_waiting(socket_manager):
     print("State: WAITING")
     while not rospy.is_shutdown():
         command = socket_manager.command_stream.readline()
+        #print(command=="")
         if command == "START\n":
             return STATE_WARMUP
         elif command == "":
@@ -216,11 +234,15 @@ def forward_state_to_julia(socket_manager, ros_manager):
     msg_vec.extend(ros_manager.new_msg.position)
     msg_vec.extend(ros_manager.new_msg.velocity)
     msg_vec.extend(ros_manager.new_targets_msg.data)
+    #print(msg_vec.new_msg.position)
     ros_manager.new_msg = None # Clear the message
+    ros_manager.new_targets_msg = None
     socket_manager.send_robot_state(time.time_ns(), msg_vec) # Send to julia
 
 def send_recv_send_recv_wait(socket_manager, ros_manager, set_zero=False):
-    if ros_manager.new_msg is not None: # New msg received from ROS subscriber
+    # print(ros_manager.new_msg.position)
+    # print(ros_manager.new_targets_msg)
+    if ((ros_manager.new_msg is not None) and (ros_manager.new_targets_msg.data is not None)): # New msg received from ROS subscriber
         forward_state_to_julia(socket_manager, ros_manager)
     command = socket_manager.recv_joint_command() 
     if command is not None: # New torque command received from julia
@@ -232,10 +254,13 @@ def send_recv_send_recv_wait(socket_manager, ros_manager, set_zero=False):
     ros_manager.rate.sleep()
 
 def loop_warmup(socket_manager, ros_manager):
-    print("State: WARMUP")
+    #print("State: WARMUP")
     while not rospy.is_shutdown():
         command = socket_manager.command_stream.readline()
+        #print("inside warmup")
+        #print(command)
         if command == "":
+            #print(10000)
             # Send zero torques only during warmup
             send_recv_send_recv_wait(socket_manager, ros_manager, set_zero=True)
         elif command == "WARMUP_DONE\n":
@@ -323,6 +348,7 @@ if __name__ == '__main__':
                         raise Exception(f"Invalid state: {state}")
                 except Exception as e:
                     print(f"Unhandled Exception: {e}")
+                    # time.sleep(0.2)
                 if not args.auto_restart:
                     break
         if not args.auto_restart:
