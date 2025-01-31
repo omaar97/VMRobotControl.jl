@@ -419,26 +419,26 @@ for (i, τ_coulomb) in zip(1:7, [5.0, 5.0, 5.0, 5.0, 3.0, 3.0, 3.0])
     add_component!(robot, TanhDamper(τ_coulomb, β, "J$i");         id="JointDamper$i")
 end;
 
-add_coordinate!(robot, FramePoint("panda_hand_tcp", SVector(0., 0.04, 0.0)); id="LeftFinger")
-add_coordinate!(robot, FramePoint("panda_hand_tcp", SVector(0., -0.04, 0.0)); id="RightFinger")
-add_coordinate!(robot, FrameOrigin("panda_hand"); id="HandBase")
+add_coordinate!(robot, FramePoint("panda_hand_tcp", SVector(0., 0.45, 0.0)); id="LeftFinger")
+add_coordinate!(robot, FramePoint("panda_hand_tcp", SVector(0., -0.45, 0.0)); id="RightFinger")
+add_coordinate!(robot, FramePoint("panda_hand", SVector(0., 0., -0.3966)); id="HandBase")
 
 vms = VirtualMechanismSystem("RobotHandover", robot)
 vm = vms.virtual_mechanism
-add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.3, -0.44, 0.5))); id="LeftFingerTarget")
-add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.3, -0.36, 0.5))); id="RightFingerTarget")
-add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.3, -0.4, 0.612))); id="HandBaseTarget")
+add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.3, -0.95, 0.5))); id="LeftFingerTarget")
+add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.3, -0.05, 0.5))); id="RightFingerTarget")
+add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.3, -0.5, 0.9))); id="HandBaseTarget")
 
 add_coordinate!(vms, CoordDifference(".robot.LeftFinger", ".virtual_mechanism.LeftFingerTarget"); id="L pos error")
 add_coordinate!(vms, CoordDifference(".robot.RightFinger", ".virtual_mechanism.RightFingerTarget"); id="R pos error")
 add_coordinate!(vms, CoordDifference(".robot.HandBase", ".virtual_mechanism.HandBaseTarget"); id="H pos error")
 
-add_component!(vms, TanhSpring("L pos error"; max_force=10.0, stiffness=5000.0); id="L spring")
-add_component!(vms, LinearDamper(50.0, "L pos error"); id="L damper")
-add_component!(vms, TanhSpring("R pos error"; max_force=10.0, stiffness=5000.0); id="R spring")
-add_component!(vms, LinearDamper(50.0, "R pos error"); id="R damper")
-# add_component!(vms, TanhSpring("H pos error"; max_force=10.0, stiffness=1000.0); id="H spring")
-# add_component!(vms, LinearDamper(25.0, "H pos error"); id="H damper")
+add_component!(vms, TanhSpring("L pos error"; max_force=5.0, stiffness=200.0); id="L spring")
+add_component!(vms, LinearDamper(5.0, "L pos error"); id="L damper")
+add_component!(vms, TanhSpring("R pos error"; max_force=5.0, stiffness=200.0); id="R spring")
+add_component!(vms, LinearDamper(5.0, "R pos error"); id="R damper")
+add_component!(vms, TanhSpring("H pos error"; max_force=5.0, stiffness=2000.0); id="H spring")
+add_component!(vms, LinearDamper(5.0, "H pos error"); id="H damper")
 # K = SMatrix{3, 3}(100., 0., 0., 0., 100., 0., 0., 0., 100.)
 # add_component!(vms, LinearSpring(K, "R pos error");       id="R spring")
 # add_component!(vms, LinearSpring(K, "L pos error");       id="L spring")
@@ -453,9 +453,9 @@ end
 
 function f_control(cache, target_positions, t, setup_ret, extra)
     LeftFinger_coord_id, RightFinger_coord_id, HandBase_coord_id = setup_ret
-    LeftFinger_coord = cache[LeftFinger_coord_id].coord_data.val[] = SVector(target_positions[1], target_positions[2], target_positions[3])
-    RightFinger_coord = cache[RightFinger_coord_id].coord_data.val[] = SVector(target_positions[4], target_positions[5], target_positions[6])
-    # HandBase_coord = cache[HandBase_coord_id].coord_data.val[] = SVector(target_positions[7], target_positions[8], target_positions[9])
+    LeftFinger_coord = cache[LeftFinger_coord_id].coord_data.val[] = SVector(target_positions[1], target_positions[2] - 0.405, target_positions[3])
+    RightFinger_coord = cache[RightFinger_coord_id].coord_data.val[] = SVector(target_positions[4], target_positions[5] + 0.405, target_positions[6])
+    HandBase_coord = cache[HandBase_coord_id].coord_data.val[] = SVector(target_positions[7], target_positions[8], target_positions[9] + 0.3966)
     nothing 
 end
 
