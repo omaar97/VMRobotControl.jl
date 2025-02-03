@@ -418,13 +418,38 @@ for (i, τ_coulomb) in zip(1:7, [5.0, 5.0, 5.0, 5.0, 3.0, 3.0, 3.0])
     add_deadzone_springs!(robot, 50.0, (limits.lower+0.1, limits.upper-0.1), "J$i")
     add_component!(robot, TanhDamper(τ_coulomb, β, "J$i");         id="JointDamper$i")
 end;
+points_distance_gripper = 0.9
+points_distance_TCP = 0.5
+add_coordinate!(robot, FramePoint("panda_hand_tcp", SVector(0., points_distance_gripper/2, 0.0)); id="LeftFinger")
+add_coordinate!(robot, FramePoint("panda_hand_tcp", SVector(0., -points_distance_gripper/2, 0.0)); id="RightFinger")
+add_coordinate!(robot, FramePoint("panda_hand", SVector(0., 0., -(points_distance_TCP - 0.1034))); id="HandBase") # 0.1034: distance between gripper and TCP
 
-add_coordinate!(robot, FramePoint("panda_hand_tcp", SVector(0., 0.45, 0.0)); id="LeftFinger")
-add_coordinate!(robot, FramePoint("panda_hand_tcp", SVector(0., -0.45, 0.0)); id="RightFinger")
-add_coordinate!(robot, FramePoint("panda_hand", SVector(0., 0., -0.3966)); id="HandBase")
+virtualMechanism = Mechanism{Float64}("IntermediateMechanism")
 
-vms = VirtualMechanismSystem("RobotHandover", robot)
+X = SVector(1., 0., 0.)
+Y = SVector(0., 1., 0.)
+Z = SVector(0., 0., 1.)
+
+F0 = root_frame(virtualMechanism)
+
+add_coordinate!(virtualMechanism, FramePoint(F0, (points_distance_gripper/2)*Y); id="VLFinger")
+add_coordinate!(virtualMechanism, FramePoint(F0); id="VRFinger")
+add_coordinate!(virtualMechanism, FramePoint(F0, points_distance_TCP*Z); id="VTCP")
+
+add_component!(virtualMechanism, PointMass(1.0, "base_centre_of_mass"); id="base_mass")
+add_component!(virtualMechanism, PointMass(1.0, "elbow_centre_of_mass"); id="lower_arm_mass")
+add_component!(virtualMechanism, PointMass(1.0, "ee_centre_of_mass"); id="ee_mass")
+
+# F1 = add_frame!(mechanism; id="VLGripper_frame")
+# F2 = add_frame!(mechanism; id="VRGripper_frame")
+# F3 = add_frame!(mechanism; id="VTCP_frame")
+
+# J1 = Rigid(Transform(points_distance_gripper*Y))
+# J2 = Rigid(Transform(points_distance_TCP*Y))
+
+vms = VirtualMechanismSystem("RobotHandover", robot, virtualMechanism)
 vm = vms.virtual_mechanism
+
 add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.3, -0.95, 0.5))); id="LeftFingerTarget")
 add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.3, -0.05, 0.5))); id="RightFingerTarget")
 add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.3, -0.5, 0.9))); id="HandBaseTarget")
