@@ -50,7 +50,7 @@ end;
 
 target_rot = AxisAngle(SVector(0., 1., 0.), Float64(π))
 vms = VirtualMechanismSystem("franka_impedance_control", robot)
-add_coordinate!(robot, FramePoint("fr3_link8", SVector(0., 0., 0.));            id="TCP position")
+add_coordinate!(robot, FramePoint("fr3_link8", SVector(0.3, 0., 0.));            id="TCP position")
 add_coordinate!(vms, QuaternionAttitude(".robot.fr3_link8", target_rot);        id="TCP orientation")
 root = root_frame(vms.robot)
 add_coordinate!(vms, FramePoint(".robot.$root", SVector(0.4, 0.0, 0.2));        id="Target position")

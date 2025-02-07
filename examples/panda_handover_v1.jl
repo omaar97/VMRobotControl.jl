@@ -418,52 +418,32 @@ for (i, τ_coulomb) in zip(1:7, [5.0, 5.0, 5.0, 5.0, 3.0, 3.0, 3.0])
     add_deadzone_springs!(robot, 50.0, (limits.lower+0.1, limits.upper-0.1), "J$i")
     add_component!(robot, TanhDamper(τ_coulomb, β, "J$i");         id="JointDamper$i")
 end;
+
 points_distance_gripper = 0.9
 points_distance_TCP = 0.5
 add_coordinate!(robot, FramePoint("panda_hand_tcp", SVector(0., points_distance_gripper/2, 0.0)); id="LeftFinger")
 add_coordinate!(robot, FramePoint("panda_hand_tcp", SVector(0., -points_distance_gripper/2, 0.0)); id="RightFinger")
 add_coordinate!(robot, FramePoint("panda_hand", SVector(0., 0., -(points_distance_TCP - 0.1034))); id="HandBase") # 0.1034: distance between gripper and TCP
+# add_coordinate!(robot, FrameOrigin("panda_hand"); id="pandaHand")
 
-virtualMechanism = Mechanism{Float64}("IntermediateMechanism")
-
-X = SVector(1., 0., 0.)
-Y = SVector(0., 1., 0.)
-Z = SVector(0., 0., 1.)
-
-F0 = root_frame(virtualMechanism)
-
-add_coordinate!(virtualMechanism, FramePoint(F0, (points_distance_gripper/2)*Y); id="VLFinger")
-add_coordinate!(virtualMechanism, FramePoint(F0); id="VRFinger")
-add_coordinate!(virtualMechanism, FramePoint(F0, points_distance_TCP*Z); id="VTCP")
-
-add_component!(virtualMechanism, PointMass(1.0, "base_centre_of_mass"); id="base_mass")
-add_component!(virtualMechanism, PointMass(1.0, "elbow_centre_of_mass"); id="lower_arm_mass")
-add_component!(virtualMechanism, PointMass(1.0, "ee_centre_of_mass"); id="ee_mass")
-
-# F1 = add_frame!(mechanism; id="VLGripper_frame")
-# F2 = add_frame!(mechanism; id="VRGripper_frame")
-# F3 = add_frame!(mechanism; id="VTCP_frame")
-
-# J1 = Rigid(Transform(points_distance_gripper*Y))
-# J2 = Rigid(Transform(points_distance_TCP*Y))
-
-vms = VirtualMechanismSystem("RobotHandover", robot, virtualMechanism)
+vms = VirtualMechanismSystem("RobotHandover", robot)
 vm = vms.virtual_mechanism
 
 add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.3, -0.95, 0.5))); id="LeftFingerTarget")
 add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.3, -0.05, 0.5))); id="RightFingerTarget")
-add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.3, -0.5, 0.9))); id="HandBaseTarget")
+add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.3, -0.5, 1.0))); id="HandBaseTarget")
 
 add_coordinate!(vms, CoordDifference(".robot.LeftFinger", ".virtual_mechanism.LeftFingerTarget"); id="L pos error")
 add_coordinate!(vms, CoordDifference(".robot.RightFinger", ".virtual_mechanism.RightFingerTarget"); id="R pos error")
 add_coordinate!(vms, CoordDifference(".robot.HandBase", ".virtual_mechanism.HandBaseTarget"); id="H pos error")
 
-add_component!(vms, TanhSpring("L pos error"; max_force=5.0, stiffness=200.0); id="L spring")
-add_component!(vms, LinearDamper(5.0, "L pos error"); id="L damper")
-add_component!(vms, TanhSpring("R pos error"; max_force=5.0, stiffness=200.0); id="R spring")
-add_component!(vms, LinearDamper(5.0, "R pos error"); id="R damper")
-add_component!(vms, TanhSpring("H pos error"; max_force=5.0, stiffness=2000.0); id="H spring")
-add_component!(vms, LinearDamper(5.0, "H pos error"); id="H damper")
+add_component!(vms, TanhSpring("L pos error"; max_force=5.0, stiffness=150.0); id="L spring")
+add_component!(vms, LinearDamper(10.0, "L pos error"); id="L damper")
+add_component!(vms, TanhSpring("R pos error"; max_force=5.0, stiffness=150.0); id="R spring")
+add_component!(vms, LinearDamper(10.0, "R pos error"); id="R damper")
+add_component!(vms, TanhSpring("H pos error"; max_force=5.0, stiffness=500.0); id="H spring")
+add_component!(vms, LinearDamper(10.0, "H pos error"); id="H damper")
+
 # K = SMatrix{3, 3}(100., 0., 0., 0., 100., 0., 0., 0., 100.)
 # add_component!(vms, LinearSpring(K, "R pos error");       id="R spring")
 # add_component!(vms, LinearSpring(K, "L pos error");       id="L spring")
@@ -478,9 +458,9 @@ end
 
 function f_control(cache, target_positions, t, setup_ret, extra)
     LeftFinger_coord_id, RightFinger_coord_id, HandBase_coord_id = setup_ret
-    LeftFinger_coord = cache[LeftFinger_coord_id].coord_data.val[] = SVector(target_positions[1], target_positions[2] - 0.405, target_positions[3])
-    RightFinger_coord = cache[RightFinger_coord_id].coord_data.val[] = SVector(target_positions[4], target_positions[5] + 0.405, target_positions[6])
-    HandBase_coord = cache[HandBase_coord_id].coord_data.val[] = SVector(target_positions[7], target_positions[8], target_positions[9] + 0.3966)
+    LeftFinger_coord = cache[LeftFinger_coord_id].coord_data.val[] = SVector(target_positions[1], target_positions[2], target_positions[3])
+    RightFinger_coord = cache[RightFinger_coord_id].coord_data.val[] = SVector(target_positions[4], target_positions[5], target_positions[6])
+    HandBase_coord = cache[HandBase_coord_id].coord_data.val[] = SVector(target_positions[7], target_positions[8], target_positions[9])
     nothing 
 end
 
