@@ -583,7 +583,6 @@ function control_step!(bundle::VMSDynamicsBundle, t_in, qʳ_in, q̇ʳ_in)
     qʳ, qᵛ = get_q(bundle)
     q̇ʳ, q̇ᵛ = get_q̇(bundle)
     uʳ, uᵛ = get_u(bundle)
-
     dt = t_in - t[]
     @assert dt >= 0 "dt of less than zero is not allowed, got $(t_in - t[])"
     t[] = t_in
@@ -617,8 +616,10 @@ function control_step!(bundle::VMSDynamicsBundle, t_in, qʳ_in, q̇ʳ_in)
     _, q̈ᵛ = get_q̈(bundle)
     _solve_dynamics_cholesky!(q̈ᵛ, Mᵛ, fᵛ, uᵛ, get_inertance_matrix_workspace(virtual_mechanism_bundle), get_generalized_force_workspace(virtual_mechanism_bundle))
     for i in eachindex(cache.q[2])
-        qᵛ[i] += q̇ᵛ[i] * dt
-        q̇ᵛ[i] += q̈ᵛ[i] * dt
+        for j in LinRange(0.0,dt,5)
+            qᵛ[i] += q̇ᵛ[i] * j
+            q̇ᵛ[i] += q̈ᵛ[i] * j
+        end
     end
     
     # Return the torques for the robot

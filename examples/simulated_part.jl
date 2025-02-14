@@ -59,6 +59,62 @@ Z = SVector(0., 0., 1.)
 
 vm = Mechanism{Float64}("IntermediateMechanism")
 
+# F0 = root_frame(vm)
+# F1 = add_frame!(vm; id="L1_frame")
+# F2 = add_frame!(vm; id="L2_frame")
+# F3 = add_frame!(vm; id="L3_frame")
+
+# J1 = Prismatic(X)
+# J2 = Prismatic(Y)
+# J3 = Prismatic(Z)
+
+# add_joint!(vm, J1; parent=F0, child=F1, id="J1")
+# add_joint!(vm, J2; parent=F1, child=F2, id="J2")
+# add_joint!(vm, J3; parent=F2, child=F3, id="J3")
+
+# # add_coordinate!(vm, ConstCoord(SVector(0.3, -0.95, 0.5)); id="LeftFingerTarget")
+# # add_coordinate!(vm, ConstCoord(SVector(0.3, -0.05, 0.5)); id="RightFingerTarget")
+# # add_coordinate!(vm, ConstCoord(SVector(0.3, -0.5, 1.0)); id="HandBaseTarget")
+
+# add_coordinate!(vm, FramePoint(F3, SVector(0.3, -0.95, 0.3)); id="VMLeftFinger")
+# add_coordinate!(vm, FramePoint(F3, SVector(0.3, -0.05, 0.3)); id="VMRightFinger")
+# add_coordinate!(vm, FramePoint(F3, SVector(0.3, -0.5, 0.8)); id="VMHandBase")
+# add_component!(vm, PointMass(0.5, "VMLeftFinger"); id="VLFMass")
+# add_component!(vm, PointMass(0.5, "VMRightFinger"); id="VRFMass")
+# add_component!(vm, PointMass(0.5, "VMHandBase"); id="VHBMass")
+
+# add_gravity_compensation!(vm, VMRobotControl.DEFAULT_GRAVITY)
+
+# vms = VirtualMechanismSystem("RobotHandover", robot, vm)
+
+# add_coordinate!(vms, ReferenceCoord(Ref(SVector(0.3, -0.95, 0.5))); id="LeftFingerTarget")
+# add_coordinate!(vms, ReferenceCoord(Ref(SVector(0.3, -0.05, 0.5))); id="RightFingerTarget")
+# add_coordinate!(vms, ReferenceCoord(Ref(SVector(0.3, -0.5, 1.0))); id="HandBaseTarget")
+
+# add_component!(vms, TanhSpring("VLF pos error"; max_force=5.0, stiffness=50.0); id="VLF spring")
+# add_component!(vms, LinearDamper(20.0, "VLF pos error"); id="VLF damper")
+# add_component!(vms, TanhSpring("VRF pos error"; max_force=5.0, stiffness=50.0); id="VRF spring")
+# add_component!(vms, LinearDamper(20.0, "VRF pos error"); id="VRF damper")
+# add_component!(vms, TanhSpring("VHB pos error"; max_force=5.0, stiffness=100.0); id="VHB spring")
+# add_component!(vms, LinearDamper(20.0, "VHB pos error"); id="VHB damper")
+
+# add_coordinate!(vms, CoordDifference(".virtual_mechanism.VMLeftFinger", "LeftFingerTarget"); id="VLF pos error")
+# add_coordinate!(vms, CoordDifference(".virtual_mechanism.VMRightFinger", "RightFingerTarget"); id="VRF pos error")
+# add_coordinate!(vms, CoordDifference(".virtual_mechanism.VMHandBase", "HandBaseTarget"); id="VHB pos error")
+
+# add_coordinate!(vms, CoordDifference(".robot.LeftFinger", ".virtual_mechanism.VMLeftFinger"); id="L pos error")
+# add_coordinate!(vms, CoordDifference(".robot.RightFinger", ".virtual_mechanism.VMRightFinger"); id="R pos error")
+# add_coordinate!(vms, CoordDifference(".robot.HandBase", ".virtual_mechanism.VMHandBase"); id="H pos error")
+
+# add_component!(vms, TanhSpring("L pos error"; max_force=2.0, stiffness=100.0); id="L spring")
+# add_component!(vms, LinearDamper(1.0, "L pos error"); id="L damper")
+# add_component!(vms, TanhSpring("R pos error"; max_force=2.0, stiffness=100.0); id="R spring")
+# add_component!(vms, LinearDamper(1.0, "R pos error"); id="R damper")
+# add_component!(vms, TanhSpring("H pos error"; max_force=2.0, stiffness=200.0); id="H spring")
+# add_component!(vms, LinearDamper(1.0, "H pos error"); id="H damper")
+
+vm = Mechanism{Float64}("IntermediateMechanism")
+
 F0 = root_frame(vm)
 F1 = add_frame!(vm; id="L1_frame")
 F2 = add_frame!(vm; id="L2_frame")
@@ -68,51 +124,90 @@ J1 = Prismatic(X)
 J2 = Prismatic(Y)
 J3 = Prismatic(Z)
 
-add_joint!(vm, J1; parent=F0, child=F1, id="J1")
-add_joint!(vm, J2; parent=F1, child=F2, id="J2")
-add_joint!(vm, J3; parent=F2, child=F3, id="J3")
+add_joint!(vm, J1; parent=F0, child=F1, id="VJ1")
+add_joint!(vm, J2; parent=F1, child=F2, id="VJ2")
+add_joint!(vm, J3; parent=F2, child=F3, id="VJ3")
+# add_coordinate!(vm, JointSubspace("VJ1");    id="VJC1")
+# add_coordinate!(vm, JointSubspace("VJ2");    id="VJC2")
+# add_coordinate!(vm, JointSubspace("VJ3");    id="VJC3")
+# add_component!(vm, LinearDamper(1.0, "VJC1");         id="VMDamper1")
+# add_component!(vm, LinearDamper(1.0, "VJC2");         id="VMDamper2")
+# add_component!(vm, LinearDamper(1.0, "VJC3");         id="VMDamper3")
 
 # add_coordinate!(vm, ConstCoord(SVector(0.3, -0.95, 0.5)); id="LeftFingerTarget")
 # add_coordinate!(vm, ConstCoord(SVector(0.3, -0.05, 0.5)); id="RightFingerTarget")
 # add_coordinate!(vm, ConstCoord(SVector(0.3, -0.5, 1.0)); id="HandBaseTarget")
 
-add_coordinate!(vm, FramePoint(F3, SVector(0.3, -0.95, 0.3)); id="VMLeftFinger")
-add_coordinate!(vm, FramePoint(F3, SVector(0.3, -0.05, 0.3)); id="VMRightFinger")
-add_coordinate!(vm, FramePoint(F3, SVector(0.3, -0.5, 0.8)); id="VMHandBase")
-add_component!(vm, PointMass(0.5, "VMLeftFinger"); id="VLFMass")
-add_component!(vm, PointMass(0.5, "VMRightFinger"); id="VRFMass")
-add_component!(vm, PointMass(0.5, "VMHandBase"); id="VHBMass")
+add_coordinate!(vm, FramePoint(F3, SVector(0.0, 0.0, 0.0)); id="VMLeftFinger")
+# add_coordinate!(vm, FramePoint(F3, SVector(0.3, -0.05, 0.3)); id="VMRightFinger")
+# add_coordinate!(vm, FramePoint(F3, SVector(0.3, -0.5, 0.8)); id="VMHandBase")
+add_component!(vm, PointMass(10.0, "VMLeftFinger"); id="VLFMass")
+# add_component!(vm, PointMass(50.0, "VMRightFinger"); id="VRFMass")
+# add_component!(vm, PointMass(50.0, "VMHandBase"); id="VHBMass")
 
 add_gravity_compensation!(vm, VMRobotControl.DEFAULT_GRAVITY)
 
 vms = VirtualMechanismSystem("RobotHandover", robot, vm)
 
-add_coordinate!(vms, ReferenceCoord(Ref(SVector(0.3, -0.95, 0.5))); id="LeftFingerTarget")
-add_coordinate!(vms, ReferenceCoord(Ref(SVector(0.3, -0.05, 0.5))); id="RightFingerTarget")
-add_coordinate!(vms, ReferenceCoord(Ref(SVector(0.3, -0.5, 1.0))); id="HandBaseTarget")
+# add_coordinate!(vms, ReferenceCoord(Ref(SVector(0.3, -0.95, 0.5))); id="LeftFingerTarget")
+# add_coordinate!(vms, ReferenceCoord(Ref(SVector(0.3, -0.05, 0.5))); id="RightFingerTarget")
+# add_coordinate!(vms, ReferenceCoord(Ref(SVector(0.3, -0.5, 1.0))); id="HandBaseTarget")
 
-add_component!(vms, TanhSpring("VLF pos error"; max_force=5.0, stiffness=50.0); id="VLF spring")
-add_component!(vms, LinearDamper(20.0, "VLF pos error"); id="VLF damper")
-add_component!(vms, TanhSpring("VRF pos error"; max_force=5.0, stiffness=50.0); id="VRF spring")
-add_component!(vms, LinearDamper(20.0, "VRF pos error"); id="VRF damper")
-add_component!(vms, TanhSpring("VHB pos error"; max_force=5.0, stiffness=100.0); id="VHB spring")
-add_component!(vms, LinearDamper(20.0, "VHB pos error"); id="VHB damper")
+add_coordinate!(vms, ConstCoord(SVector(0.3, -0.95, 0.5)); id="LeftFingerTarget")
+# add_coordinate!(vms, ConstCoord(SVector(0.3, -0.05, 0.5)); id="RightFingerTarget")
+# add_coordinate!(vms, ConstCoord(SVector(0.3, -0.5, 1.0)); id="HandBaseTarget")
 
-add_coordinate!(vms, CoordDifference(".virtual_mechanism.VMLeftFinger", "LeftFingerTarget"); id="VLF pos error")
-add_coordinate!(vms, CoordDifference(".virtual_mechanism.VMRightFinger", "RightFingerTarget"); id="VRF pos error")
-add_coordinate!(vms, CoordDifference(".virtual_mechanism.VMHandBase", "HandBaseTarget"); id="VHB pos error")
+add_coordinate!(vms, CoordDifference("LeftFingerTarget", ".virtual_mechanism.VMLeftFinger"); id="VLF pos error")
+# add_coordinate!(vms, CoordDifference("RightFingerTarget", ".virtual_mechanism.VMRightFinger"); id="VRF pos error")
+# add_coordinate!(vms, CoordDifference("HandBaseTarget", ".virtual_mechanism.VMHandBase"); id="VHB pos error")
+
+add_component!(vms, TanhSpring("VLF pos error"; max_force=10.0, stiffness=100.0); id="VLF spring")
+add_component!(vms, LinearDamper(50.0, "VLF pos error"); id="VLF damper")
+# add_component!(vms, TanhSpring("VRF pos error"; max_force=10.0, stiffness=100.0); id="VRF spring")
+# add_component!(vms, LinearDamper(10.0, "VRF pos error"); id="VRF damper")
+# add_component!(vms, TanhSpring("VHB pos error"; max_force=10.0, stiffness=100.0); id="VHB spring")
+# add_component!(vms, LinearDamper(10.0, "VHB pos error"); id="VHB damper")
 
 add_coordinate!(vms, CoordDifference(".robot.LeftFinger", ".virtual_mechanism.VMLeftFinger"); id="L pos error")
-add_coordinate!(vms, CoordDifference(".robot.RightFinger", ".virtual_mechanism.VMRightFinger"); id="R pos error")
-add_coordinate!(vms, CoordDifference(".robot.HandBase", ".virtual_mechanism.VMHandBase"); id="H pos error")
+# add_coordinate!(vms, CoordDifference(".robot.RightFinger", ".virtual_mechanism.VMRightFinger"); id="R pos error")
+# add_coordinate!(vms, CoordDifference(".robot.HandBase", ".virtual_mechanism.VMHandBase"); id="H pos error")
 
-add_component!(vms, TanhSpring("L pos error"; max_force=2.0, stiffness=100.0); id="L spring")
-add_component!(vms, LinearDamper(1.0, "L pos error"); id="L damper")
-add_component!(vms, TanhSpring("R pos error"; max_force=2.0, stiffness=100.0); id="R spring")
-add_component!(vms, LinearDamper(1.0, "R pos error"); id="R damper")
-add_component!(vms, TanhSpring("H pos error"; max_force=2.0, stiffness=200.0); id="H spring")
-add_component!(vms, LinearDamper(1.0, "H pos error"); id="H damper")
+# add_component!(vms, TanhSpring("L pos error"; max_force=5.0, stiffness=100.0); id="L spring")
+# add_component!(vms, LinearDamper(1.0, "L pos error"); id="L damper")
+# add_component!(vms, TanhSpring("R pos error"; max_force=0.1, stiffness=100.0); id="R spring")
+# add_component!(vms, LinearDamper(1.0, "R pos error"); id="R damper")
+# add_component!(vms, TanhSpring("H pos error"; max_force=0.1, stiffness=200.0); id="H spring")
+# add_component!(vms, LinearDamper(1.0, "H pos error"); id="H damper")
 
+
+
+# K = SMatrix{3, 3}(100., 0., 0., 0., 100., 0., 0., 0., 100.)
+# add_component!(vms, LinearSpring(K, "R pos error");       id="R spring")
+# add_component!(vms, LinearSpring(K, "L pos error");       id="L spring")
+# add_component!(vms, LinearSpring(K, "H pos error");       id="H spring")
+
+# function f_setup(cache)
+#     LeftFinger_coord_id = get_compiled_coordID(cache, "LeftFingerTarget")
+#     # RightFinger_coord_id = get_compiled_coordID(cache, "RightFingerTarget")
+#     # HandBase_coord_id = get_compiled_coordID(cache, "HandBaseTarget")
+#     VMLeftFinger_coord_id = get_compiled_coordID(cache, ".virtual_mechanism.VMLeftFinger")
+#     # VMHandBase_coord_id = get_compiled_coordID(cache, ".virtual_mechanism.VMHandBase")
+#     # return (LeftFinger_coord_id, RightFinger_coord_id, HandBase_coord_id, VMHandBase_coord_id, VMLeftFinger_coord_id)
+#     return (LeftFinger_coord_id, VMLeftFinger_coord_id)
+# end
+
+# function f_control(cache, target_positions, t, setup_ret, extra)
+#     # LeftFinger_coord_id, RightFinger_coord_id, HandBase_coord_id, VMHandBase_coord_id, VMLeftFinger_coord_id = setup_ret
+#     LeftFinger_coord_id, VMLeftFinger_coord_id = setup_ret
+#     print(configuration(cache, VMLeftFinger_coord_id))
+#     print("\n")
+#     print(configuration(cache, LeftFinger_coord_id))
+#     print("\n----------- \n")
+#     # cache[LeftFinger_coord_id].coord_data.val[] = SVector(target_positions[1], target_positions[2], target_positions[3])
+#     # cache[RightFinger_coord_id].coord_data.val[] = SVector(target_positions[4], target_positions[5], target_positions[6])
+#     # cache[HandBase_coord_id].coord_data.val[] = SVector(target_positions[7], target_positions[8], target_positions[9])
+#     nothing 
+# end
 
 # disturbance_func(t) = mod(t, 6) < 3 ? SVector(0., 0., 0.) : SVector(0., 5.0, 5.0)
 
@@ -127,22 +222,22 @@ add_component!(vms, LinearDamper(1.0, "H pos error"); id="H damper")
 #     nothing
 # end
 
-function f_setup(cache)
-    # LeftFinger_coord_id = get_compiled_coordID(cache, ".virtual_mechanism.LeftFingerTarget")
-    # RightFinger_coord_id = get_compiled_coordID(cache, ".virtual_mechanism.RightFingerTarget")
-    # HandBase_coord_id = get_compiled_coordID(cache, ".virtual_mechanism.HandBaseTarget")
-    # return (LeftFinger_coord_id, RightFinger_coord_id, HandBase_coord_id)
-    LeftFinger_coord_id = get_compiled_coordID(cache, "LeftFingerTarget")
-    return (LeftFinger_coord_id)
-end
+# function f_setup(cache)
+#     # LeftFinger_coord_id = get_compiled_coordID(cache, ".virtual_mechanism.LeftFingerTarget")
+#     # RightFinger_coord_id = get_compiled_coordID(cache, ".virtual_mechanism.RightFingerTarget")
+#     # HandBase_coord_id = get_compiled_coordID(cache, ".virtual_mechanism.HandBaseTarget")
+#     # return (LeftFinger_coord_id, RightFinger_coord_id, HandBase_coord_id)
+#     LeftFinger_coord_id = get_compiled_coordID(cache, "LeftFingerTarget")
+#     return (LeftFinger_coord_id)
+# end
 
-function f_control(cache, t, setup_ret, extra)
-    LeftFinger_coord_id = setup_ret
-    # LeftFinger_coord = cache[LeftFinger_coord_id].coord_data.val[] = SVector(target_positions[1], target_positions[2], target_positions[3])
-    # RightFinger_coord = cache[RightFinger_coord_id].coord_data.val[] = SVector(target_positions[4], target_positions[5], target_positions[6])
-    # HandBase_coord = cache[HandBase_coord_id].coord_data.val[] = SVector(target_positions[7], target_positions[8], target_positions[9])W 
-    nothing
-end
+# function f_control(cache, t, setup_ret, extra)
+#     LeftFinger_coord_id = setup_ret
+#     # LeftFinger_coord = cache[LeftFinger_coord_id].coord_data.val[] = SVector(target_positions[1], target_positions[2], target_positions[3])
+#     # RightFinger_coord = cache[RightFinger_coord_id].coord_data.val[] = SVector(target_positions[4], target_positions[5], target_positions[6])
+#     # HandBase_coord = cache[HandBase_coord_id].coord_data.val[] = SVector(target_positions[7], target_positions[8], target_positions[9])W 
+#     nothing
+# end
 
 cvms = compile(vms)
 
@@ -156,7 +251,7 @@ dcache = new_dynamics_cache(compile(vms))
 q = ([0.0, 0.3, 0.0, -1.8, 0.0, π/2, 0.0], [0.0, 0.0, 0.0])
 q̇ = zero_q̇(dcache.vms)
 g = VMRobotControl.DEFAULT_GRAVITY
-prob = get_ode_problem(dcache, g, q, q̇, tspan; f_setup, f_control)
+prob = get_ode_problem(dcache, g, q, q̇, tspan; f_setup)
 @info "Simulating robot handover sample."
 sol = solve(prob, Tsit5(); maxiters=1e5, abstol=1e-3, reltol=1e-3); # Low tol to speed up simulation
 
@@ -211,20 +306,24 @@ robotsketch!(ls, plotting_kcache, scale=0.3, linewidth=2.5, transparency=true)
 
 ## Label target and TCP
 target_1_pos_id = get_compiled_coordID(plotting_kcache[], "LeftFingerTarget")
-target_2_pos_id = get_compiled_coordID(plotting_kcache[], "RightFingerTarget")
-target_3_pos_id = get_compiled_coordID(plotting_kcache[], "HandBaseTarget")
+# target_2_pos_id = get_compiled_coordID(plotting_kcache[], "RightFingerTarget")
+# target_3_pos_id = get_compiled_coordID(plotting_kcache[], "HandBaseTarget")
 
 target_1V_pos_id = get_compiled_coordID(plotting_kcache[], ".virtual_mechanism.VMLeftFinger")
-target_2V_pos_id = get_compiled_coordID(plotting_kcache[], ".virtual_mechanism.VMRightFinger")
-target_3V_pos_id = get_compiled_coordID(plotting_kcache[], ".virtual_mechanism.VMHandBase")
+# target_2V_pos_id = get_compiled_coordID(plotting_kcache[], ".virtual_mechanism.VMRightFinger")
+# target_3V_pos_id = get_compiled_coordID(plotting_kcache[], ".virtual_mechanism.VMHandBase")
 
 l_tcp_pos_id = get_compiled_coordID(plotting_kcache[], ".robot.LeftFinger")
-r_tcp_pos_id = get_compiled_coordID(plotting_kcache[], ".robot.RightFinger")
-h_tcp_pos_id = get_compiled_coordID(plotting_kcache[], ".robot.HandBase")
+# r_tcp_pos_id = get_compiled_coordID(plotting_kcache[], ".robot.RightFinger")
+# h_tcp_pos_id = get_compiled_coordID(plotting_kcache[], ".robot.HandBase")
 
-scatter!(ls, plotting_kcache, [target_1_pos_id, target_2_pos_id, target_3_pos_id]; target_scatter_kwargs...)
-scatter!(ls, plotting_kcache, [target_1V_pos_id, target_2V_pos_id, target_3V_pos_id]; target2_scatter_kwargs...)
-scatter!(ls, plotting_kcache, [l_tcp_pos_id, r_tcp_pos_id, h_tcp_pos_id]; tcp_scatter_kwargs...)
+# scatter!(ls, plotting_kcache, [target_1_pos_id, target_2_pos_id, target_3_pos_id]; target_scatter_kwargs...)
+# scatter!(ls, plotting_kcache, [target_1V_pos_id, target_2V_pos_id, target_3V_pos_id]; target2_scatter_kwargs...)
+# scatter!(ls, plotting_kcache, [l_tcp_pos_id, r_tcp_pos_id, h_tcp_pos_id]; tcp_scatter_kwargs...)
+
+scatter!(ls, plotting_kcache, [target_1_pos_id]; target_scatter_kwargs...)
+scatter!(ls, plotting_kcache, [target_1V_pos_id]; target2_scatter_kwargs...)
+scatter!(ls, plotting_kcache, [l_tcp_pos_id]; tcp_scatter_kwargs...)
 
 savepath = "docs/src/assets/random_trial.mp4"
 animate_robot_odesolution(fig, sol, plotting_kcache, savepath; t=plotting_t, fastforward=1.0, fps=20)
