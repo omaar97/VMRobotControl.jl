@@ -288,6 +288,7 @@ function loop_active(connection::ROSPyClientConnection, control_func!::Function)
     @info "State: ACTIVE"
     i = 1
     t = 0.0
+    start_time = time()
     while true
         yield() # To allow for interrupts
         command = check_tcp(connection)::Union{String, Nothing}
@@ -295,7 +296,7 @@ function loop_active(connection::ROSPyClientConnection, control_func!::Function)
             data_targets, data = check_udp(connection)
             if !isnothing(data)
                 iswarmup = true
-                i, dt, t = let t0 = t; t = time(); (i+1, t - t0, t) end
+                i, dt, t = let t0 = t; t = (time() - start_time); (i+1, t - t0, t) end
                 stop = control_func!(connection.torques, data.state, i, data_targets.target_pos, t, dt)
                 stop && return STATE_STOPPED # Stop the controller gracefully
                 any(isnan, connection.torques) && error("Control function returned NaN torques: $(connection.torques)")
@@ -369,6 +370,7 @@ function ros_vm_controller(
         qʳ = view(state.state, 1:NDOF)
         q̇ʳ = zeros(eltype(control_cache), NDOF)
         target_positions_ = view(target_positions.target_pos, 1:9)
+        first_t = get_t(control_cache)[]
         control_step!(control_cache, 0.0, qʳ, q̇ʳ) # Step at t=0 to set initial state
     end
     
@@ -382,7 +384,30 @@ function ros_vm_controller(
             qʳ = view(state, 1:NDOF)
             q̇ʳ = view(state, NDOF+1:2*NDOF)
             target_positions_ = view(target_positions, 1:9) # 3 targets with 3 dimensions each (x,y,z)
+            N_microsteps = 5
+            # prev_t = last_t
+            last_t = get_t(control_cache)[]
+            # print(t)
+            # print("\n--- last_t: --\n")
+            # print(last_t)
+            # print("\n---dt:---\n")
+            dt = (t - last_t)
+            if (dt > 0.1)
+                N_microsteps = dt / 
+                temp_dt = 
+                f_control(control_cache, target_positions_, t, args, (dt, i)) # Call user control function
+                torques .= control_step!(control_cache, t, qʳ, q̇ʳ) # Get torques
+            end
+            # # print(dt)
+            # print("\n------\n")
+            # dt = 0.0001
             # Main control step
+            # for j = 1:N_microsteps
+            #     f_control(control_cache, target_positions_, last_t + dt*i, args, (dt, i)) # Call user control function
+            #     torques .= control_step!(control_cache, last_t + dt*i, qʳ, q̇ʳ) # Get torques
+            # end
+            print((t - last_t))
+            print("\n")
             f_control(control_cache, target_positions_, t, args, (dt, i)) # Call user control function
             torques .= control_step!(control_cache, t, qʳ, q̇ʳ) # Get torques
             return false
@@ -458,7 +483,7 @@ add_joint!(vm, J3; parent=F2, child=F3, id="VJ3")
 add_coordinate!(vm, FramePoint(F3, SVector(0.5, -0.5, 0.3)); id="VMLeftFinger")
 # add_coordinate!(vm, FramePoint(F3, SVector(0.3, -0.05, 0.3)); id="VMRightFinger")
 # add_coordinate!(vm, FramePoint(F3, SVector(0.3, -0.5, 0.8)); id="VMHandBase")
-add_component!(vm, PointMass(1000.0, "VMLeftFinger"); id="VLFMass")
+add_component!(vm, PointMass(10.0, "VMLeftFinger"); id="VLFMass")
 # add_component!(vm, PointMass(50.0, "VMRightFinger"); id="VRFMass")
 # add_component!(vm, PointMass(50.0, "VMHandBase"); id="VHBMass")
 

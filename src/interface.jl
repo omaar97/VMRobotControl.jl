@@ -616,10 +616,8 @@ function control_step!(bundle::VMSDynamicsBundle, t_in, qʳ_in, q̇ʳ_in)
     _, q̈ᵛ = get_q̈(bundle)
     _solve_dynamics_cholesky!(q̈ᵛ, Mᵛ, fᵛ, uᵛ, get_inertance_matrix_workspace(virtual_mechanism_bundle), get_generalized_force_workspace(virtual_mechanism_bundle))
     for i in eachindex(cache.q[2])
-        for j in LinRange(0.0,dt,5)
-            qᵛ[i] += q̇ᵛ[i] * j
-            q̇ᵛ[i] += q̈ᵛ[i] * j
-        end
+        qᵛ[i] += q̇ᵛ[i] * dt
+        q̇ᵛ[i] += q̈ᵛ[i] * dt
     end
     
     # Return the torques for the robot
