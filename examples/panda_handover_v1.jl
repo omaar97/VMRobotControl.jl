@@ -16,7 +16,8 @@ using VMRobotControl:
     DEFAULT_GRAVITY,
     DEFAULT_F_SETUP,
     DEFAULT_F_CONTROL,
-    robot_ndof
+    robot_ndof,
+    remake
 
 ROSPY_LISTEN_PORT = 25342
 
@@ -381,7 +382,7 @@ function ros_vm_controller(
             @assert length(state) == 2*NDOF
             qʳ = view(state, 1:NDOF)
             q̇ʳ = view(state, NDOF+1:2*NDOF)
-            target_positions_ = view(target_positions, 1:9) # 3 targets with 3 dimensions each (x,y,z)
+            target_positions_ = view(target_positions, 1:length(target_positions)) # 3 targets with 3 dimensions each (x,y,z)
             # Main control step
             f_control(control_cache, target_positions_, t, args, (dt, i)) # Call user control function
             torques .= control_step!(control_cache, t, qʳ, q̇ʳ) # Get torques
@@ -391,6 +392,36 @@ function ros_vm_controller(
     # Check that stored energy is within bounds
     (E = stored_energy(control_cache)) > E_max && error("Initial stored energy exceeds $(E_max)J, was $(E)J")
     warmup_and_activate(connection, control_func!; )
+end
+
+
+function add_bounded_region_tanh_spring!(mech, stiffness_input, max_force_input, bounds, coord_id)
+    lb, ub = bounds
+    add_coordinate!(mech, ConstCoord(SVector(lb, lb, lb)); id="lb_$coord_id") # < needs unique name? 
+    add_coordinate!(mech, ConstCoord(SVector(lb, lb, lb)); id="ub_$coord_id")
+    add_coordinate!(mech, CoordDifference(coord_id, "lb_$coord_id"); id="ext_lower_$coord_id")
+    add_coordinate!(mech, CoordDifference(coord_id, "ub_$coord_id"); id="ext_upper_$coord_id")
+
+    center_spring = TanhSpring(coord_id; max_force=max_force_input, stiffness=stiffness_input)
+    lower_spring = TanhSpring("ext_lower_$coord_id"; max_force=max_force_input/2, stiffness=-5.0)
+    upper_spring = TanhSpring("ext_upper_$coord_id"; max_force=max_force_input/2, stiffness=-5.0)
+
+    add_component!(mech, center_spring; id="$(coord_id)_spring_center")
+    add_component!(mech, lower_spring; id="$(coord_id)_spring_lower")
+    add_component!(mech, upper_spring; id="$(coord_id)_spring_upper")
+end
+
+function add_plane_region_spring!(mechanism, stiffness, bound, coord_id)
+    lb, ub = bounds
+    lb_coord_id = add_coordinate!(mechanism, ConstCoord(SVector(lb, lb, lb)); id="lb_$coord_id")
+    ub_coord_id = add_coordinate!(mechanism, ConstCoord(SVector(ub, ub, ub)); id="ub_$coord_id")
+    ext_lower = add_coordinate!(mechanism, CoordDifference(coord_id, lb_coord_id); id="ext_lower_$coord_id")
+    ext_upper = add_coordinate!(mechanism, CoordDifference(coord_id, ub_coord_id); id="ext_upper_$coord_id") 
+    s_lower = ReLUSpring(stiffness, ext_lower, true) # true ⟹ Flip direction of rectification
+    s_upper = ReLUSpring(stiffness, ext_upper, false) 
+    add_component!(mechanism, s_lower; id="$(coord_id)_spring_lower")
+    add_component!(mechanism, s_upper; id="$(coord_id)_spring_upper")
+    mechanism
 end
 
 #### Now load the robot and the VMC ###
@@ -415,9 +446,15 @@ for (i, τ_coulomb) in zip(1:7, [5.0, 5.0, 5.0, 5.0, 3.0, 3.0, 3.0])
     isnothing(limits) && continue
     @assert ~isnothing(limits.lower) && ~isnothing(limits.upper)
     add_coordinate!(robot, JointSubspace("panda_joint$i");    id="J$i")
-    add_deadzone_springs!(robot, 50.0, (limits.lower+0.1, limits.upper-0.1), "J$i")
+    add_deadzone_springs!(robot, 50.0, (limits.lower+0.3, limits.upper-0.3), "J$i")
     add_component!(robot, TanhDamper(τ_coulomb, β, "J$i");         id="JointDamper$i")
 end;
+
+
+add_coordinate!(robot, FramePoint("panda_hand_tcp", SVector(0., 0.04, 0.0)); id="RealLeftFinger")
+add_coordinate!(robot, FramePoint("panda_hand_tcp", SVector(0., -0.04, 0.0)); id="RealRightFinger")
+add_coordinate!(robot, FrameOrigin("panda_hand"); id="RealHandBase")
+add_coordinate!(robot, FrameOrigin("panda_hand_tcp"); id="MiddlePointGripper")
 
 points_distance_gripper = 0.9
 points_distance_TCP = 0.5
@@ -429,6 +466,27 @@ add_coordinate!(robot, FramePoint("panda_hand", SVector(0., 0., -(points_distanc
 vms = VirtualMechanismSystem("RobotHandover", robot)
 vm = vms.virtual_mechanism
 
+repulsive_fields = Dict(
+    "repulsiveField1" => SVector(0.5,  0.1, 0.3),
+    "repulsiveField2" => SVector(0.3, -0.2, 0.1),
+    "repulsiveField3" => SVector(0.3, -0.2, 0.1)
+)
+
+graspingPoints = String[]
+# graspingPoints = ["RealLeftFinger", "RealRightFinger", "RealHandBase"]
+graspingPoints = ["MiddlePointGripper"]
+
+for (id, pos) in repulsive_fields
+    add_coordinate!(vm, ReferenceCoord(Ref(pos)); id)
+end
+
+for id in graspingPoints
+    for repulsive_field in keys(repulsive_fields)
+        add_coordinate!(vms, CoordDifference(".robot.$id", ".virtual_mechanism.$repulsive_field"); id="$repulsive_field $id error")
+        add_component!(vms, GaussianSpring("$repulsive_field $id error"; max_force=-15.0, width=0.08); id="$repulsive_field $id spring")
+    end
+end
+
 add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.3, -0.95, 0.5))); id="LeftFingerTarget")
 add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.3, -0.05, 0.5))); id="RightFingerTarget")
 add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.3, -0.5, 1.0))); id="HandBaseTarget")
@@ -437,11 +495,15 @@ add_coordinate!(vms, CoordDifference(".robot.LeftFinger", ".virtual_mechanism.Le
 add_coordinate!(vms, CoordDifference(".robot.RightFinger", ".virtual_mechanism.RightFingerTarget"); id="R pos error")
 add_coordinate!(vms, CoordDifference(".robot.HandBase", ".virtual_mechanism.HandBaseTarget"); id="H pos error")
 
-add_component!(vms, TanhSpring("L pos error"; max_force=5.0, stiffness=150.0); id="L spring")
+# add_bounded_region_tanh_spring!(vms, 250.0, 3.0, (-0.5, 0.5), "L pos error")
+# add_bounded_region_tanh_spring!(vms, 250.0, 3.0, (-0.5, 0.5), "R pos error")
+# add_bounded_region_tanh_spring!(vms, 500.0, 3.0, (-0.5, 0.5), "H pos error")
+default_stiffness = 175.0
+add_component!(vms, TanhSpring("L pos error"; max_force=5.0, stiffness=default_stiffness); id="L spring")
 add_component!(vms, LinearDamper(10.0, "L pos error"); id="L damper")
-add_component!(vms, TanhSpring("R pos error"; max_force=5.0, stiffness=150.0); id="R spring")
+add_component!(vms, TanhSpring("R pos error"; max_force=5.0, stiffness=default_stiffness); id="R spring")
 add_component!(vms, LinearDamper(10.0, "R pos error"); id="R damper")
-add_component!(vms, TanhSpring("H pos error"; max_force=5.0, stiffness=500.0); id="H spring")
+add_component!(vms, TanhSpring("H pos error"; max_force=5.0, stiffness=default_stiffness); id="H spring")
 add_component!(vms, LinearDamper(10.0, "H pos error"); id="H damper")
 
 # K = SMatrix{3, 3}(100., 0., 0., 0., 100., 0., 0., 0., 100.)
@@ -453,21 +515,47 @@ function f_setup(cache)
     LeftFinger_coord_id = get_compiled_coordID(cache, ".virtual_mechanism.LeftFingerTarget")
     RightFinger_coord_id = get_compiled_coordID(cache, ".virtual_mechanism.RightFingerTarget")
     HandBase_coord_id = get_compiled_coordID(cache, ".virtual_mechanism.HandBaseTarget")
-    return (LeftFinger_coord_id, RightFinger_coord_id, HandBase_coord_id)
+    repulsiveField1_id = get_compiled_coordID(cache, ".virtual_mechanism.repulsiveField1")
+    repulsiveField2_id = get_compiled_coordID(cache, ".virtual_mechanism.repulsiveField2")
+    repulsiveField3_id = get_compiled_coordID(cache, ".virtual_mechanism.repulsiveField3")
+    RealHandBase_id = get_compiled_coordID(cache, ".robot.RealHandBase")
+    leftSpring_id = get_compiled_componentID(cache, "L spring")
+    rightSpring_id = get_compiled_componentID(cache, "R spring")
+    baseSpring_id = get_compiled_componentID(cache, "H spring")
+    return (LeftFinger_coord_id, RightFinger_coord_id, HandBase_coord_id,
+             repulsiveField1_id, repulsiveField2_id, repulsiveField3_id,
+             leftSpring_id, rightSpring_id, baseSpring_id, RealHandBase_id)
 end
 
 function f_control(cache, target_positions, t, setup_ret, extra)
-    LeftFinger_coord_id, RightFinger_coord_id, HandBase_coord_id = setup_ret
-    LeftFinger_coord = cache[LeftFinger_coord_id].coord_data.val[] = SVector(target_positions[1], target_positions[2], target_positions[3])
-    RightFinger_coord = cache[RightFinger_coord_id].coord_data.val[] = SVector(target_positions[4], target_positions[5], target_positions[6])
-    HandBase_coord = cache[HandBase_coord_id].coord_data.val[] = SVector(target_positions[7], target_positions[8], target_positions[9])
+    LeftFinger_coord_id, RightFinger_coord_id, HandBase_coord_id, 
+    repulsiveField1_id, repulsiveField2_id, repulsiveField3_id,     
+    leftSpring_id, rightSpring_id, baseSpring_id, RealHandBase_id = setup_ret
+    cache[LeftFinger_coord_id].coord_data.val[] = SVector(target_positions[1], target_positions[2], target_positions[3])
+    cache[RightFinger_coord_id].coord_data.val[] = SVector(target_positions[4], target_positions[5], target_positions[6])
+    cache[HandBase_coord_id].coord_data.val[] = SVector(target_positions[7], target_positions[8], target_positions[9])
+    cache[repulsiveField1_id].coord_data.val[] = SVector(target_positions[10], target_positions[11], target_positions[12])
+    cache[repulsiveField2_id].coord_data.val[] = SVector(target_positions[13], target_positions[14], target_positions[15])
+    cache[repulsiveField3_id].coord_data.val[] = SVector(target_positions[16], target_positions[17], target_positions[18])
+    baseGoal = SVector(target_positions[19], target_positions[20], target_positions[21])
+    # print(norm(configuration(cache, RealHandBase_id)))
+    # print("\n")
+    if norm(baseGoal) > 0.8
+        cache[leftSpring_id] = remake(cache[leftSpring_id]; stiffness=0.01)
+        cache[rightSpring_id] = remake(cache[rightSpring_id]; stiffness=0.01)
+        cache[baseSpring_id] = remake(cache[baseSpring_id]; stiffness=0.01)
+    else
+        cache[leftSpring_id] = remake(cache[leftSpring_id]; stiffness=default_stiffness)
+        cache[rightSpring_id] = remake(cache[rightSpring_id]; stiffness=default_stiffness)
+        cache[baseSpring_id] = remake(cache[baseSpring_id]; stiffness=default_stiffness)
+    end
     nothing 
 end
 
 cvms = compile(vms)
 
 qᵛ = Float64[]
-with_rospy_connection(Sockets.localhost, ROSPY_LISTEN_PORT, 7, 14, 3) do connection
+with_rospy_connection(Sockets.localhost, ROSPY_LISTEN_PORT, 7, 14, 7) do connection
     ros_vm_controller(connection, cvms, qᵛ; f_control, f_setup, E_max=30.0)
 end
 

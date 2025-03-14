@@ -294,7 +294,7 @@ if __name__ == '__main__':
     parser.add_argument("joint_state_topic", type=str)
     parser.add_argument("targets_state_topic", type=str)
     parser.add_argument("--rate", type=float, default=1000)
-    parser.add_argument("--targets_size", type=float, default=3)
+    parser.add_argument("--targets_size", type=int, default=3)
     parser.add_argument("--joint_state_size", default=None)
     parser.add_argument("--listen_port", type=int, default=25342)
     parser.add_argument("--listen_ip", type=str, default="127.0.0.1")

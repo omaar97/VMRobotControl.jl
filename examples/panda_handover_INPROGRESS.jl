@@ -384,7 +384,6 @@ function ros_vm_controller(
             qʳ = view(state, 1:NDOF)
             q̇ʳ = view(state, NDOF+1:2*NDOF)
             target_positions_ = view(target_positions, 1:9) # 3 targets with 3 dimensions each (x,y,z)
-            N_microsteps = 5
             # prev_t = last_t
             last_t = get_t(control_cache)[]
             # print(t)
@@ -393,8 +392,27 @@ function ros_vm_controller(
             # print("\n---dt:---\n")
             dt = (t - last_t)
             if (dt > 0.1)
-                N_microsteps = dt / 
-                temp_dt = 
+                print("inside if dt>0.1")
+                print(dt)
+                print("\n")
+                N_microsteps = 1
+                microstep_loop = true
+                while microstep_loop == true 
+                    N_microsteps = N_microsteps*2
+                    dt_micro = dt / N_microsteps
+                    print(dt_micro)
+                    print("\n")
+                    if dt_micro < 0.01
+                        print("inside dt<0.01: ")
+                        print(dt_micro)
+                        for j = 1:N_microsteps
+                            f_control(control_cache, target_positions_, last_t + dt_micro*i, args, (dt, i)) # Call user control function
+                            torques .= control_step!(control_cache, last_t + dt_micro*i, qʳ, q̇ʳ) # Get torques
+                        end
+                        microstep_loop = false
+                    end
+                end 
+            else
                 f_control(control_cache, target_positions_, t, args, (dt, i)) # Call user control function
                 torques .= control_step!(control_cache, t, qʳ, q̇ʳ) # Get torques
             end
@@ -406,10 +424,8 @@ function ros_vm_controller(
             #     f_control(control_cache, target_positions_, last_t + dt*i, args, (dt, i)) # Call user control function
             #     torques .= control_step!(control_cache, last_t + dt*i, qʳ, q̇ʳ) # Get torques
             # end
-            print((t - last_t))
-            print("\n")
-            f_control(control_cache, target_positions_, t, args, (dt, i)) # Call user control function
-            torques .= control_step!(control_cache, t, qʳ, q̇ʳ) # Get torques
+            f_control(control_cache, target_positions_, last_t + dt, args, (dt, i)) # Call user control function
+            torques .= control_step!(control_cache, last_t + dt, qʳ, q̇ʳ) # Get torques
             return false
         end
     end
@@ -476,50 +492,50 @@ add_joint!(vm, J3; parent=F2, child=F3, id="VJ3")
 # add_component!(vm, LinearDamper(1.0, "VJC2");         id="VMDamper2")
 # add_component!(vm, LinearDamper(1.0, "VJC3");         id="VMDamper3")
 
-# add_coordinate!(vm, ConstCoord(SVector(0.3, -0.95, 0.5)); id="LeftFingerTarget")
-# add_coordinate!(vm, ConstCoord(SVector(0.3, -0.05, 0.5)); id="RightFingerTarget")
-# add_coordinate!(vm, ConstCoord(SVector(0.3, -0.5, 1.0)); id="HandBaseTarget")
+add_coordinate!(vm, ConstCoord(SVector(0.3, -0.95, 0.5)); id="LeftFingerTarget")
+add_coordinate!(vm, ConstCoord(SVector(0.3, -0.05, 0.5)); id="RightFingerTarget")
+add_coordinate!(vm, ConstCoord(SVector(0.3, -0.5, 1.0)); id="HandBaseTarget")
 
 add_coordinate!(vm, FramePoint(F3, SVector(0.5, -0.5, 0.3)); id="VMLeftFinger")
-# add_coordinate!(vm, FramePoint(F3, SVector(0.3, -0.05, 0.3)); id="VMRightFinger")
-# add_coordinate!(vm, FramePoint(F3, SVector(0.3, -0.5, 0.8)); id="VMHandBase")
+add_coordinate!(vm, FramePoint(F3, SVector(0.3, -0.05, 0.3)); id="VMRightFinger")
+add_coordinate!(vm, FramePoint(F3, SVector(0.3, -0.5, 0.8)); id="VMHandBase")
 add_component!(vm, PointMass(10.0, "VMLeftFinger"); id="VLFMass")
-# add_component!(vm, PointMass(50.0, "VMRightFinger"); id="VRFMass")
-# add_component!(vm, PointMass(50.0, "VMHandBase"); id="VHBMass")
+add_component!(vm, PointMass(10.0, "VMRightFinger"); id="VRFMass")
+add_component!(vm, PointMass(10.0, "VMHandBase"); id="VHBMass")
 
 add_gravity_compensation!(vm, VMRobotControl.DEFAULT_GRAVITY)
 
 vms = VirtualMechanismSystem("RobotHandover", robot, vm)
 
-# add_coordinate!(vms, ReferenceCoord(Ref(SVector(0.3, -0.95, 0.5))); id="LeftFingerTarget")
-# add_coordinate!(vms, ReferenceCoord(Ref(SVector(0.3, -0.05, 0.5))); id="RightFingerTarget")
-# add_coordinate!(vms, ReferenceCoord(Ref(SVector(0.3, -0.5, 1.0))); id="HandBaseTarget")
+add_coordinate!(vms, ReferenceCoord(Ref(SVector(0.3, -0.95, 0.5))); id="LeftFingerTarget")
+add_coordinate!(vms, ReferenceCoord(Ref(SVector(0.3, -0.05, 0.5))); id="RightFingerTarget")
+add_coordinate!(vms, ReferenceCoord(Ref(SVector(0.3, -0.5, 1.0))); id="HandBaseTarget")
 
-add_coordinate!(vms, ConstCoord(SVector(0.3, -0.95, 0.5)); id="LeftFingerTarget")
+# add_coordinate!(vms, ConstCoord(SVector(0.3, -0.95, 0.5)); id="LeftFingerTarget")
 # add_coordinate!(vms, ConstCoord(SVector(0.3, -0.05, 0.5)); id="RightFingerTarget")
 # add_coordinate!(vms, ConstCoord(SVector(0.3, -0.5, 1.0)); id="HandBaseTarget")
 
 add_coordinate!(vms, CoordDifference("LeftFingerTarget", ".virtual_mechanism.VMLeftFinger"); id="VLF pos error")
-# add_coordinate!(vms, CoordDifference("RightFingerTarget", ".virtual_mechanism.VMRightFinger"); id="VRF pos error")
-# add_coordinate!(vms, CoordDifference("HandBaseTarget", ".virtual_mechanism.VMHandBase"); id="VHB pos error")
+add_coordinate!(vms, CoordDifference("RightFingerTarget", ".virtual_mechanism.VMRightFinger"); id="VRF pos error")
+add_coordinate!(vms, CoordDifference("HandBaseTarget", ".virtual_mechanism.VMHandBase"); id="VHB pos error")
 
 add_component!(vms, TanhSpring("VLF pos error"; max_force=10.0, stiffness=100.0); id="VLF spring")
-add_component!(vms, LinearDamper(50.0, "VLF pos error"); id="VLF damper")
-# add_component!(vms, TanhSpring("VRF pos error"; max_force=10.0, stiffness=100.0); id="VRF spring")
-# add_component!(vms, LinearDamper(10.0, "VRF pos error"); id="VRF damper")
-# add_component!(vms, TanhSpring("VHB pos error"; max_force=10.0, stiffness=100.0); id="VHB spring")
-# add_component!(vms, LinearDamper(10.0, "VHB pos error"); id="VHB damper")
+add_component!(vms, LinearDamper(20.0, "VLF pos error"); id="VLF damper")
+add_component!(vms, TanhSpring("VRF pos error"; max_force=10.0, stiffness=100.0); id="VRF spring")
+add_component!(vms, LinearDamper(20.0, "VRF pos error"); id="VRF damper")
+add_component!(vms, TanhSpring("VHB pos error"; max_force=10.0, stiffness=100.0); id="VHB spring")
+add_component!(vms, LinearDamper(20.0, "VHB pos error"); id="VHB damper")
 
 add_coordinate!(vms, CoordDifference(".robot.LeftFinger", ".virtual_mechanism.VMLeftFinger"); id="L pos error")
-# add_coordinate!(vms, CoordDifference(".robot.RightFinger", ".virtual_mechanism.VMRightFinger"); id="R pos error")
-# add_coordinate!(vms, CoordDifference(".robot.HandBase", ".virtual_mechanism.VMHandBase"); id="H pos error")
+add_coordinate!(vms, CoordDifference(".robot.RightFinger", ".virtual_mechanism.VMRightFinger"); id="R pos error")
+add_coordinate!(vms, CoordDifference(".robot.HandBase", ".virtual_mechanism.VMHandBase"); id="H pos error")
 
-# add_component!(vms, TanhSpring("L pos error"; max_force=5.0, stiffness=100.0); id="L spring")
-# add_component!(vms, LinearDamper(1.0, "L pos error"); id="L damper")
-# add_component!(vms, TanhSpring("R pos error"; max_force=0.1, stiffness=100.0); id="R spring")
-# add_component!(vms, LinearDamper(1.0, "R pos error"); id="R damper")
-# add_component!(vms, TanhSpring("H pos error"; max_force=0.1, stiffness=200.0); id="H spring")
-# add_component!(vms, LinearDamper(1.0, "H pos error"); id="H damper")
+add_component!(vms, TanhSpring("L pos error"; max_force=5.0, stiffness=100.0); id="L spring")
+add_component!(vms, LinearDamper(5.0, "L pos error"); id="L damper")
+add_component!(vms, TanhSpring("R pos error"; max_force=5.0, stiffness=100.0); id="R spring")
+add_component!(vms, LinearDamper(5.0, "R pos error"); id="R damper")
+add_component!(vms, TanhSpring("H pos error"; max_force=5.0, stiffness=200.0); id="H spring")
+add_component!(vms, LinearDamper(5.0, "H pos error"); id="H damper")
 
 
 
@@ -530,24 +546,22 @@ add_coordinate!(vms, CoordDifference(".robot.LeftFinger", ".virtual_mechanism.VM
 
 function f_setup(cache)
     LeftFinger_coord_id = get_compiled_coordID(cache, "LeftFingerTarget")
-    # RightFinger_coord_id = get_compiled_coordID(cache, "RightFingerTarget")
-    # HandBase_coord_id = get_compiled_coordID(cache, "HandBaseTarget")
+    RightFinger_coord_id = get_compiled_coordID(cache, "RightFingerTarget")
+    HandBase_coord_id = get_compiled_coordID(cache, "HandBaseTarget")
     VMLeftFinger_coord_id = get_compiled_coordID(cache, ".virtual_mechanism.VMLeftFinger")
-    # VMHandBase_coord_id = get_compiled_coordID(cache, ".virtual_mechanism.VMHandBase")
-    # return (LeftFinger_coord_id, RightFinger_coord_id, HandBase_coord_id, VMHandBase_coord_id, VMLeftFinger_coord_id)
-    return (LeftFinger_coord_id, VMLeftFinger_coord_id)
+    VMHandBase_coord_id = get_compiled_coordID(cache, ".virtual_mechanism.VMHandBase")
+    return (LeftFinger_coord_id, RightFinger_coord_id, HandBase_coord_id, VMHandBase_coord_id, VMLeftFinger_coord_id)
 end
 
 function f_control(cache, target_positions, t, setup_ret, extra)
-    # LeftFinger_coord_id, RightFinger_coord_id, HandBase_coord_id, VMHandBase_coord_id, VMLeftFinger_coord_id = setup_ret
-    LeftFinger_coord_id, VMLeftFinger_coord_id = setup_ret
+    LeftFinger_coord_id, RightFinger_coord_id, HandBase_coord_id, VMHandBase_coord_id, VMLeftFinger_coord_id = setup_ret
     print(configuration(cache, VMLeftFinger_coord_id))
     print("\n")
     print(configuration(cache, LeftFinger_coord_id))
     print("\n----------- \n")
-    # cache[LeftFinger_coord_id].coord_data.val[] = SVector(target_positions[1], target_positions[2], target_positions[3])
-    # cache[RightFinger_coord_id].coord_data.val[] = SVector(target_positions[4], target_positions[5], target_positions[6])
-    # cache[HandBase_coord_id].coord_data.val[] = SVector(target_positions[7], target_positions[8], target_positions[9])
+    cache[LeftFinger_coord_id].coord_data.val[] = SVector(target_positions[1], target_positions[2], target_positions[3])
+    cache[RightFinger_coord_id].coord_data.val[] = SVector(target_positions[4], target_positions[5], target_positions[6])
+    cache[HandBase_coord_id].coord_data.val[] = SVector(target_positions[7], target_positions[8], target_positions[9])
     nothing 
 end
 
