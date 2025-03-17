@@ -395,34 +395,34 @@ function ros_vm_controller(
 end
 
 
-function add_bounded_region_tanh_spring!(mech, stiffness_input, max_force_input, bounds, coord_id)
-    lb, ub = bounds
-    add_coordinate!(mech, ConstCoord(SVector(lb, lb, lb)); id="lb_$coord_id") # < needs unique name? 
-    add_coordinate!(mech, ConstCoord(SVector(lb, lb, lb)); id="ub_$coord_id")
-    add_coordinate!(mech, CoordDifference(coord_id, "lb_$coord_id"); id="ext_lower_$coord_id")
-    add_coordinate!(mech, CoordDifference(coord_id, "ub_$coord_id"); id="ext_upper_$coord_id")
+# function add_bounded_region_tanh_spring!(mech, stiffness_input, max_force_input, bounds, coord_id)
+#     lb, ub = bounds
+#     add_coordinate!(mech, ConstCoord(SVector(lb, lb, lb)); id="lb_$coord_id") # < needs unique name? 
+#     add_coordinate!(mech, ConstCoord(SVector(lb, lb, lb)); id="ub_$coord_id")
+#     add_coordinate!(mech, CoordDifference(coord_id, "lb_$coord_id"); id="ext_lower_$coord_id")
+#     add_coordinate!(mech, CoordDifference(coord_id, "ub_$coord_id"); id="ext_upper_$coord_id")
 
-    center_spring = TanhSpring(coord_id; max_force=max_force_input, stiffness=stiffness_input)
-    lower_spring = TanhSpring("ext_lower_$coord_id"; max_force=max_force_input/2, stiffness=-5.0)
-    upper_spring = TanhSpring("ext_upper_$coord_id"; max_force=max_force_input/2, stiffness=-5.0)
+#     center_spring = TanhSpring(coord_id; max_force=max_force_input, stiffness=stiffness_input)
+#     lower_spring = TanhSpring("ext_lower_$coord_id"; max_force=max_force_input/2, stiffness=150.0)
+#     upper_spring = TanhSpring("ext_upper_$coord_id"; max_force=max_force_input/2, stiffness=150.0)
 
-    add_component!(mech, center_spring; id="$(coord_id)_spring_center")
-    add_component!(mech, lower_spring; id="$(coord_id)_spring_lower")
-    add_component!(mech, upper_spring; id="$(coord_id)_spring_upper")
-end
+#     add_component!(mech, center_spring; id="$(coord_id)_spring_center")
+#     add_component!(mech, lower_spring; id="$(coord_id)_spring_lower")
+#     add_component!(mech, upper_spring; id="$(coord_id)_spring_upper")
+# end
 
-function add_plane_region_spring!(mechanism, stiffness, bound, coord_id)
-    lb, ub = bounds
-    lb_coord_id = add_coordinate!(mechanism, ConstCoord(SVector(lb, lb, lb)); id="lb_$coord_id")
-    ub_coord_id = add_coordinate!(mechanism, ConstCoord(SVector(ub, ub, ub)); id="ub_$coord_id")
-    ext_lower = add_coordinate!(mechanism, CoordDifference(coord_id, lb_coord_id); id="ext_lower_$coord_id")
-    ext_upper = add_coordinate!(mechanism, CoordDifference(coord_id, ub_coord_id); id="ext_upper_$coord_id") 
-    s_lower = ReLUSpring(stiffness, ext_lower, true) # true ⟹ Flip direction of rectification
-    s_upper = ReLUSpring(stiffness, ext_upper, false) 
-    add_component!(mechanism, s_lower; id="$(coord_id)_spring_lower")
-    add_component!(mechanism, s_upper; id="$(coord_id)_spring_upper")
-    mechanism
-end
+# function add_plane_region_spring!(mechanism, stiffness, bound, coord_id)
+#     lb, ub = bounds
+#     lb_coord_id = add_coordinate!(mechanism, ConstCoord(SVector(lb, lb, lb)); id="lb_$coord_id")
+#     ub_coord_id = add_coordinate!(mechanism, ConstCoord(SVector(ub, ub, ub)); id="ub_$coord_id")
+#     ext_lower = add_coordinate!(mechanism, CoordDifference(coord_id, lb_coord_id); id="ext_lower_$coord_id")
+#     ext_upper = add_coordinate!(mechanism, CoordDifference(coord_id, ub_coord_id); id="ext_upper_$coord_id") 
+#     s_lower = ReLUSpring(stiffness, ext_lower, true) # true ⟹ Flip direction of rectification
+#     s_upper = ReLUSpring(stiffness, ext_upper, false) 
+#     add_component!(mechanism, s_lower; id="$(coord_id)_spring_lower")
+#     add_component!(mechanism, s_upper; id="$(coord_id)_spring_upper")
+#     mechanism
+# end
 
 #### Now load the robot and the VMC ###
 
@@ -446,7 +446,7 @@ for (i, τ_coulomb) in zip(1:7, [5.0, 5.0, 5.0, 5.0, 3.0, 3.0, 3.0])
     isnothing(limits) && continue
     @assert ~isnothing(limits.lower) && ~isnothing(limits.upper)
     add_coordinate!(robot, JointSubspace("panda_joint$i");    id="J$i")
-    add_deadzone_springs!(robot, 50.0, (limits.lower+0.3, limits.upper-0.3), "J$i")
+    add_deadzone_springs!(robot, 60.0, (limits.lower+0.6, limits.upper-0.6), "J$i")
     add_component!(robot, TanhDamper(τ_coulomb, β, "J$i");         id="JointDamper$i")
 end;
 
@@ -489,22 +489,37 @@ end
 
 add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.3, -0.95, 0.5))); id="LeftFingerTarget")
 add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.3, -0.05, 0.5))); id="RightFingerTarget")
+add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.3, -0.46, 0.5))); id="RealRightFingerTarget")
 add_coordinate!(vm, ReferenceCoord(Ref(SVector(0.3, -0.5, 1.0))); id="HandBaseTarget")
 
 add_coordinate!(vms, CoordDifference(".robot.LeftFinger", ".virtual_mechanism.LeftFingerTarget"); id="L pos error")
 add_coordinate!(vms, CoordDifference(".robot.RightFinger", ".virtual_mechanism.RightFingerTarget"); id="R pos error")
 add_coordinate!(vms, CoordDifference(".robot.HandBase", ".virtual_mechanism.HandBaseTarget"); id="H pos error")
+add_coordinate!(vms, CoordDifference(".robot.RealRightFinger", ".virtual_mechanism.RealRightFingerTarget"); id="RR pos error")
 
 # add_bounded_region_tanh_spring!(vms, 250.0, 3.0, (-0.5, 0.5), "L pos error")
 # add_bounded_region_tanh_spring!(vms, 250.0, 3.0, (-0.5, 0.5), "R pos error")
 # add_bounded_region_tanh_spring!(vms, 500.0, 3.0, (-0.5, 0.5), "H pos error")
-default_stiffness = 175.0
-add_component!(vms, TanhSpring("L pos error"; max_force=5.0, stiffness=default_stiffness); id="L spring")
-add_component!(vms, LinearDamper(10.0, "L pos error"); id="L damper")
-add_component!(vms, TanhSpring("R pos error"; max_force=5.0, stiffness=default_stiffness); id="R spring")
-add_component!(vms, LinearDamper(10.0, "R pos error"); id="R damper")
-add_component!(vms, TanhSpring("H pos error"; max_force=5.0, stiffness=default_stiffness); id="H spring")
-add_component!(vms, LinearDamper(10.0, "H pos error"); id="H damper")
+default_stiffness = 150.0
+default_max_force = 7.0
+default_damping = 9.0
+add_component!(vms, TanhSpring("L pos error"; max_force=default_max_force, stiffness=default_stiffness); id="L spring")
+add_component!(vms, LinearDamper(default_damping, "L pos error"); id="L damper")
+add_component!(vms, TanhSpring("R pos error"; max_force=default_max_force, stiffness=default_stiffness); id="R spring")
+add_component!(vms, LinearDamper(default_damping, "R pos error"); id="R damper")
+add_component!(vms, TanhSpring("RR pos error"; max_force=0.001, stiffness=default_stiffness); id="RR spring")
+# add_component!(vms, LinearDamper(default_damping, "RR pos error"); id="RR damper")
+add_component!(vms, TanhSpring("H pos error"; max_force=default_max_force, stiffness=default_stiffness); id="H spring")
+add_component!(vms, LinearDamper(default_damping, "H pos error"); id="H damper")
+
+# add_bounded_region_tanh_spring!(vms, default_stiffness, default_max_force, (-0.1, 0.1), "L pos error")
+# add_component!(vms, LinearDamper(default_damping, "L pos error"); id="L damper")
+# add_bounded_region_tanh_spring!(vms, default_stiffness, default_max_force, (-0.1, 0.1), "R pos error")
+# add_component!(vms, LinearDamper(default_damping, "R pos error"); id="R damper")
+# add_bounded_region_tanh_spring!(vms, default_stiffness, default_max_force, (-0.1, 0.1), "RR pos error")
+# add_component!(vms, LinearDamper(default_damping, "RR pos error"); id="RR damper")
+# add_bounded_region_tanh_spring!(vms, default_stiffness, default_max_force, (-0.1, 0.1), "H pos error")
+# add_component!(vms, LinearDamper(default_damping, "H pos error"); id="H damper")
 
 # K = SMatrix{3, 3}(100., 0., 0., 0., 100., 0., 0., 0., 100.)
 # add_component!(vms, LinearSpring(K, "R pos error");       id="R spring")
@@ -515,6 +530,7 @@ function f_setup(cache)
     LeftFinger_coord_id = get_compiled_coordID(cache, ".virtual_mechanism.LeftFingerTarget")
     RightFinger_coord_id = get_compiled_coordID(cache, ".virtual_mechanism.RightFingerTarget")
     HandBase_coord_id = get_compiled_coordID(cache, ".virtual_mechanism.HandBaseTarget")
+    RealRightFingerTarget_coord_id = get_compiled_coordID(cache, ".virtual_mechanism.RealRightFingerTarget")
     repulsiveField1_id = get_compiled_coordID(cache, ".virtual_mechanism.repulsiveField1")
     repulsiveField2_id = get_compiled_coordID(cache, ".virtual_mechanism.repulsiveField2")
     repulsiveField3_id = get_compiled_coordID(cache, ".virtual_mechanism.repulsiveField3")
@@ -522,32 +538,41 @@ function f_setup(cache)
     leftSpring_id = get_compiled_componentID(cache, "L spring")
     rightSpring_id = get_compiled_componentID(cache, "R spring")
     baseSpring_id = get_compiled_componentID(cache, "H spring")
-    return (LeftFinger_coord_id, RightFinger_coord_id, HandBase_coord_id,
-             repulsiveField1_id, repulsiveField2_id, repulsiveField3_id,
+    RealRightSpring_id = get_compiled_componentID(cache, "RR spring")
+    return (LeftFinger_coord_id, RightFinger_coord_id, HandBase_coord_id, RealRightFingerTarget_coord_id,
+             repulsiveField1_id, repulsiveField2_id, repulsiveField3_id, RealRightSpring_id,
              leftSpring_id, rightSpring_id, baseSpring_id, RealHandBase_id)
 end
 
 function f_control(cache, target_positions, t, setup_ret, extra)
-    LeftFinger_coord_id, RightFinger_coord_id, HandBase_coord_id, 
-    repulsiveField1_id, repulsiveField2_id, repulsiveField3_id,     
+    LeftFinger_coord_id, RightFinger_coord_id, HandBase_coord_id, RealRightFingerTarget_coord_id,
+    repulsiveField1_id, repulsiveField2_id, repulsiveField3_id, RealRightSpring_id,
     leftSpring_id, rightSpring_id, baseSpring_id, RealHandBase_id = setup_ret
     cache[LeftFinger_coord_id].coord_data.val[] = SVector(target_positions[1], target_positions[2], target_positions[3])
     cache[RightFinger_coord_id].coord_data.val[] = SVector(target_positions[4], target_positions[5], target_positions[6])
     cache[HandBase_coord_id].coord_data.val[] = SVector(target_positions[7], target_positions[8], target_positions[9])
-    cache[repulsiveField1_id].coord_data.val[] = SVector(target_positions[10], target_positions[11], target_positions[12])
-    cache[repulsiveField2_id].coord_data.val[] = SVector(target_positions[13], target_positions[14], target_positions[15])
-    cache[repulsiveField3_id].coord_data.val[] = SVector(target_positions[16], target_positions[17], target_positions[18])
-    baseGoal = SVector(target_positions[19], target_positions[20], target_positions[21])
+    cache[RealRightFingerTarget_coord_id].coord_data.val[] = SVector(target_positions[10], target_positions[11], target_positions[12])
+    cache[repulsiveField1_id].coord_data.val[] = SVector(target_positions[13], target_positions[14], target_positions[15])
+    cache[repulsiveField2_id].coord_data.val[] = SVector(target_positions[16], target_positions[17], target_positions[18])
+    cache[repulsiveField3_id].coord_data.val[] = SVector(target_positions[19], target_positions[20], target_positions[21])
+    baseGoal = SVector(target_positions[22], target_positions[23], target_positions[24])
+    # cache[repulsiveField1_id].coord_data.val[] = SVector(target_positions[10], target_positions[11], target_positions[12])
+    # cache[repulsiveField2_id].coord_data.val[] = SVector(target_positions[13], target_positions[14], target_positions[15])
+    # cache[repulsiveField3_id].coord_data.val[] = SVector(target_positions[16], target_positions[17], target_positions[18])
+    # baseGoal = SVector(target_positions[19], target_positions[20], target_positions[21])
     # print(norm(configuration(cache, RealHandBase_id)))
     # print("\n")
+
     if norm(baseGoal) > 0.8
         cache[leftSpring_id] = remake(cache[leftSpring_id]; stiffness=0.01)
         cache[rightSpring_id] = remake(cache[rightSpring_id]; stiffness=0.01)
         cache[baseSpring_id] = remake(cache[baseSpring_id]; stiffness=0.01)
+        cache[RealRightSpring_id] = remake(cache[RealRightSpring_id]; stiffness=0.01)
     else
         cache[leftSpring_id] = remake(cache[leftSpring_id]; stiffness=default_stiffness)
         cache[rightSpring_id] = remake(cache[rightSpring_id]; stiffness=default_stiffness)
         cache[baseSpring_id] = remake(cache[baseSpring_id]; stiffness=default_stiffness)
+        cache[RealRightSpring_id] = remake(cache[RealRightSpring_id]; stiffness=default_stiffness)
     end
     nothing 
 end
@@ -555,7 +580,7 @@ end
 cvms = compile(vms)
 
 qᵛ = Float64[]
-with_rospy_connection(Sockets.localhost, ROSPY_LISTEN_PORT, 7, 14, 7) do connection
+with_rospy_connection(Sockets.localhost, ROSPY_LISTEN_PORT, 7, 14, 8) do connection
     ros_vm_controller(connection, cvms, qᵛ; f_control, f_setup, E_max=30.0)
 end
 
