@@ -21,7 +21,7 @@ using VMRobotControl:
 
 ROSPY_LISTEN_PORT = 25342
 
-SAVE_DATA = true
+SAVE_DATA = false
 
 const START = "START"
 const WARMUP_DONE = "WARMUP_DONE"
@@ -452,7 +452,12 @@ for (i, τ_coulomb) in zip(1:7, [5.0, 5.0, 5.0, 5.0, 3.0, 3.0, 3.0])
     @assert ~isnothing(limits.lower) && ~isnothing(limits.upper)
     add_coordinate!(robot, JointSubspace("panda_joint$i");    id="J$i")
     add_deadzone_springs!(robot, 100.0, (limits.lower+0.3, limits.upper-0.3), "J$i")
-    add_component!(robot, TanhDamper(τ_coulomb, β, "J$i");         id="JointDamper$i")
+    if i == 7
+        add_component!(robot, TanhDamper(7.0, 0.2, "J$i");         id="JointDamper$i")
+        println("added damper for joint 7")
+    else
+        add_component!(robot, TanhDamper(τ_coulomb, β, "J$i");         id="JointDamper$i")
+    end
 end;
 
 
@@ -505,14 +510,16 @@ add_coordinate!(vms, CoordDifference(".robot.HandBase", ".virtual_mechanism.Hand
 # add_coordinate!(vms, CoordDifference(".robot.RealRightFinger", ".virtual_mechanism.RealRightFingerTarget"); id="RR pos error")
 # add_coordinate!(vms, CoordDifference(".robot.RealLeftFinger", ".virtual_mechanism.RealLeftFingerTarget"); id="RL pos error")
 add_coordinate!(vms, CoordDifference(".robot.RealHandBase", ".virtual_mechanism.RealHandBaseTarget"); id="RH pos error")
+add_coordinate!(vms, CoordDifference(".robot.RealRightFinger", ".virtual_mechanism.RealRightFingerTarget"); id="RR pos error")
 
 # add_bounded_region_tanh_spring!(vms, 250.0, 3.0, (-0.5, 0.5), "L pos error")
 # add_bounded_region_tanh_spring!(vms, 250.0, 3.0, (-0.5, 0.5), "R pos error")
 # add_bounded_region_tanh_spring!(vms, 500.0, 3.0, (-0.5, 0.5), "H pos error")
-default_stiffness = 50.0
-default_max_force = 6.0
+default_stiffness = 10.0
+additional_stiffness = 100.0
+default_max_force = 10.0
 default_damping = 3.0
-max_force_small_range = 4.0
+max_force_small_range = 5.0
 add_component!(vms, TanhSpring("L pos error"; max_force=default_max_force, stiffness=default_stiffness); id="L spring")
 add_component!(vms, LinearDamper(default_damping, "L pos error"); id="L damper")
 add_component!(vms, TanhSpring("R pos error"; max_force=default_max_force, stiffness=default_stiffness); id="R spring")
@@ -525,11 +532,11 @@ add_component!(vms, TanhSpring("H pos error"; max_force=default_max_force, stiff
 add_component!(vms, LinearDamper(default_damping, "H pos error"); id="H damper")
 # add_component!(vms, TanhSpring("RH pos error"; max_force=default_max_force, stiffness=default_stiffness); id="RH spring")
 # add_component!(vms, LinearDamper(default_damping, "RH pos error"); id="RH damper")
-add_component!(vms, TanhSpring("H pos error"; max_force=max_force_small_range, stiffness=2000.0); id="AH spring")
+add_component!(vms, TanhSpring("H pos error"; max_force=max_force_small_range, stiffness=additional_stiffness); id="AH spring")
 # add_component!(vms, TanhSpring("RR pos error"; max_force=max_force_small_range, stiffness=500.0); id="ARR spring")
 # add_component!(vms, TanhSpring("RL pos error"; max_force=max_force_small_range, stiffness=500.0); id="ARL spring")
-add_component!(vms, TanhSpring("R pos error"; max_force=max_force_small_range, stiffness=2000.0); id="AR spring")
-add_component!(vms, TanhSpring("L pos error"; max_force=max_force_small_range, stiffness=2000.0); id="AL spring")
+add_component!(vms, TanhSpring("R pos error"; max_force=max_force_small_range, stiffness=additional_stiffness); id="AR spring")
+add_component!(vms, TanhSpring("L pos error"; max_force=max_force_small_range, stiffness=additional_stiffness); id="AL spring")
 
 
 # add_bounded_region_tanh_spring!(vms, default_stiffness, default_max_force, (-0.1, 0.1), "L pos error")
@@ -687,8 +694,12 @@ function f_control(cache, target_positions, t, setup_ret, extra)
     currentTime = time()
     push!(time_vector, currentTime)
 
-    damping_val = norm(configuration(cache, positionDiff_id))
-    new_damping = 2.0*tanh(100*damping_val) + 3.0*tanh(10*(damping_val-0.3)) + 3.0*tanh(10*(damping_val+0.3))
+    # damping_val = max(norm(RightFingerRobot - RightFingerFromQuest), norm(BaseRobot - BaseFromQuest))
+    damping_val = max(norm(RightFingerTargetPos - RightFingerFurtherRobot), norm(BaseTargetPos - BaseFurtherRobot))
+    
+    # new_damping = 7.0*tanh(500*damping_val) + 2.0*tanh(10*(damping_val-0.2)) + 2.0*tanh(10*(damping_val+0.2))
+    new_damping = 2.0 + 7.0*tanh(10*damping_val)
+    # new_damping = 2.0*tanh(20*damping_val)
 
     if norm(handPosition) > 0.8
         cache[leftSpring_id] = remake(cache[leftSpring_id]; stiffness=0.001)
@@ -701,9 +712,9 @@ function f_control(cache, target_positions, t, setup_ret, extra)
         cache[leftSpring_id] = remake(cache[leftSpring_id]; stiffness=default_stiffness)
         cache[rightSpring_id] = remake(cache[rightSpring_id]; stiffness=default_stiffness)
         cache[baseSpring_id] = remake(cache[baseSpring_id]; stiffness=default_stiffness)
-        cache[additionalLeftSpring_id] = remake(cache[additionalLeftSpring_id]; stiffness=default_stiffness)
-        cache[additionalRightSpring_id] = remake(cache[additionalRightSpring_id]; stiffness=default_stiffness)
-        cache[additionalBaseSpring_id] = remake(cache[additionalBaseSpring_id]; stiffness=default_stiffness)
+        cache[additionalLeftSpring_id] = remake(cache[additionalLeftSpring_id]; stiffness=additional_stiffness)
+        cache[additionalRightSpring_id] = remake(cache[additionalRightSpring_id]; stiffness=additional_stiffness)
+        cache[additionalBaseSpring_id] = remake(cache[additionalBaseSpring_id]; stiffness=additional_stiffness)
 
         cache[damper_R_id] = remake(cache[damper_R_id]; damping=new_damping)
         cache[damper_L_id] = remake(cache[damper_L_id]; damping=new_damping)
