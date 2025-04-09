@@ -452,12 +452,13 @@ for (i, τ_coulomb) in zip(1:7, [5.0, 5.0, 5.0, 5.0, 3.0, 3.0, 3.0])
     @assert ~isnothing(limits.lower) && ~isnothing(limits.upper)
     add_coordinate!(robot, JointSubspace("panda_joint$i");    id="J$i")
     add_deadzone_springs!(robot, 100.0, (limits.lower+0.3, limits.upper-0.3), "J$i")
-    if i == 7
-        add_component!(robot, TanhDamper(7.0, 0.2, "J$i");         id="JointDamper$i")
-        println("added damper for joint 7")
-    else
-        add_component!(robot, TanhDamper(τ_coulomb, β, "J$i");         id="JointDamper$i")
-    end
+    add_component!(robot, TanhDamper(τ_coulomb, β, "J$i");         id="JointDamper$i")
+    # if i == 7
+    #     add_component!(robot, TanhDamper(7.0, 0.25, "J$i");         id="JointDamper$i")
+    #     println("added damper for joint 7")
+    # else
+    #     add_component!(robot, TanhDamper(τ_coulomb, β, "J$i");         id="JointDamper$i")
+    # end
 end;
 
 
@@ -493,7 +494,7 @@ end
 for id in graspingPoints
     for repulsive_field in keys(repulsive_fields)
         add_coordinate!(vms, CoordDifference(".robot.$id", ".virtual_mechanism.$repulsive_field"); id="$repulsive_field $id error")
-        add_component!(vms, GaussianSpring("$repulsive_field $id error"; max_force=-15.0, width=0.05); id="$repulsive_field $id spring")
+        add_component!(vms, GaussianSpring("$repulsive_field $id error"; max_force=-15.0, width=0.07); id="$repulsive_field $id spring")
     end
 end
 
@@ -516,7 +517,7 @@ add_coordinate!(vms, CoordDifference(".robot.RealRightFinger", ".virtual_mechani
 # add_bounded_region_tanh_spring!(vms, 250.0, 3.0, (-0.5, 0.5), "R pos error")
 # add_bounded_region_tanh_spring!(vms, 500.0, 3.0, (-0.5, 0.5), "H pos error")
 default_stiffness = 10.0
-additional_stiffness = 100.0
+additional_stiffness = 80.0
 default_max_force = 10.0
 default_damping = 3.0
 max_force_small_range = 5.0
@@ -701,7 +702,7 @@ function f_control(cache, target_positions, t, setup_ret, extra)
     new_damping = 2.0 + 7.0*tanh(10*damping_val)
     # new_damping = 2.0*tanh(20*damping_val)
 
-    if norm(handPosition) > 0.8
+    if norm(handPosition) > 0.8 || handPosition[1] > 0.4
         cache[leftSpring_id] = remake(cache[leftSpring_id]; stiffness=0.001)
         cache[rightSpring_id] = remake(cache[rightSpring_id]; stiffness=0.001)
         cache[baseSpring_id] = remake(cache[baseSpring_id]; stiffness=0.001)
@@ -720,7 +721,6 @@ function f_control(cache, target_positions, t, setup_ret, extra)
         cache[damper_L_id] = remake(cache[damper_L_id]; damping=new_damping)
         cache[damper_H_id] = remake(cache[damper_H_id]; damping=new_damping)
     end
-
     nothing 
 end
 
