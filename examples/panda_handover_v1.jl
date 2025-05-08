@@ -21,7 +21,8 @@ using VMRobotControl:
 
 ROSPY_LISTEN_PORT = 25342
 
-SAVE_DATA = false
+SAVE_DATA = true
+FILE_NAME = "examples/17April_BananaObjTransExp.jld2"
 
 const START = "START"
 const WARMUP_DONE = "WARMUP_DONE"
@@ -189,7 +190,8 @@ function with_rospy_connection(f::Function, rospy_ip, rospy_port, num_torques::I
         f(connection)
     finally
         if SAVE_DATA
-            @save "examples/07April_1.jld2" time_vector LeftFingerTarget_intended RightFingerTarget_intended BaseTarget_intended LeftFingerTarget_actual RightFingerTarget_actual BaseTarget_actual LeftFinger_intended RightFinger_intended Base_intended LeftFinger_actual RightFinger_actual Base_actual RepulsivePosition_right RepulsivePosition_left RepulsivePosition_front RightDamper_velocity LeftDamper_velocity BaseDamper_velocity HandPositions
+            @save FILE_NAME time_vector LeftFingerTarget_intended RightFingerTarget_intended BaseTarget_intended LeftFingerTarget_actual RightFingerTarget_actual BaseTarget_actual LeftFinger_intended RightFinger_intended Base_intended LeftFinger_actual RightFinger_actual Base_actual RepulsivePosition_right RepulsivePosition_left RepulsivePosition_front RightDamper_velocity LeftDamper_velocity BaseDamper_velocity Force_leftspring_main Force_rightspring_main Force_basespring_main Force_leftspring_additional Force_rightspring_additional Force_basespring_additional Force_repuslive1middlept Force_repuslive2middlept Force_repuslive3middlept Force_repuslive1base Force_repuslive2base Force_repuslive3base Force_leftdamper Force_rightdamper  Force_basedamper HandPositions damping_input_for_tanh damping_after_tanh
+            println(FILE_NAME)
         end
         _cleanup!(connection)
     end
@@ -494,7 +496,7 @@ end
 for id in graspingPoints
     for repulsive_field in keys(repulsive_fields)
         add_coordinate!(vms, CoordDifference(".robot.$id", ".virtual_mechanism.$repulsive_field"); id="$repulsive_field $id error")
-        add_component!(vms, GaussianSpring("$repulsive_field $id error"; max_force=-15.0, width=0.07); id="$repulsive_field $id spring")
+        add_component!(vms, GaussianSpring("$repulsive_field $id error"; max_force=-0.001, width=0.001); id="$repulsive_field $id spring")
     end
 end
 
@@ -580,7 +582,28 @@ RightDamper_velocity = SVector{3, Float64}[]
 LeftDamper_velocity = SVector{3, Float64}[]
 BaseDamper_velocity = SVector{3, Float64}[]
 
+Force_leftspring_main = SVector{3, Float64}[]
+Force_rightspring_main = SVector{3, Float64}[]
+Force_basespring_main = SVector{3, Float64}[]
+Force_leftspring_additional = SVector{3, Float64}[]
+Force_rightspring_additional = SVector{3, Float64}[]
+Force_basespring_additional = SVector{3, Float64}[]
+
+Force_repuslive1middlept = SVector{3, Float64}[]
+Force_repuslive2middlept = SVector{3, Float64}[]
+Force_repuslive3middlept = SVector{3, Float64}[]
+Force_repuslive1base = SVector{3, Float64}[]
+Force_repuslive2base = SVector{3, Float64}[]
+Force_repuslive3base = SVector{3, Float64}[]
+
+Force_leftdamper = SVector{3, Float64}[]
+Force_rightdamper  = SVector{3, Float64}[]
+Force_basedamper = SVector{3, Float64}[]
+
 HandPositions = SVector{3, Float64}[]
+
+damping_input_for_tanh = Float64[]
+damping_after_tanh = Float64[]
 
 function f_setup(cache)
     LeftFingerTarget_coord_id = get_compiled_coordID(cache, ".virtual_mechanism.LeftFingerTarget")
@@ -617,13 +640,26 @@ function f_setup(cache)
     additionalRightSpring_id = get_compiled_componentID(cache, "AR spring")
     additionalBaseSpring_id = get_compiled_componentID(cache, "AH spring")
 
+    additionalLeftSpring_id = get_compiled_componentID(cache, "AL spring")
+    additionalRightSpring_id = get_compiled_componentID(cache, "AR spring")
+    additionalBaseSpring_id = get_compiled_componentID(cache, "AH spring")
+
+    repulsive1_middlepoint_id = get_compiled_componentID(cache, "repulsiveField1 MiddlePointGripper spring")
+    repulsive2_middlepoint_id = get_compiled_componentID(cache, "repulsiveField2 MiddlePointGripper spring")
+    repulsive3_middlepoint_id = get_compiled_componentID(cache, "repulsiveField3 MiddlePointGripper spring")
+    repulsive1_gripperbase_id = get_compiled_componentID(cache, "repulsiveField1 RealHandBase spring")
+    repulsive2_gripperbase_id = get_compiled_componentID(cache, "repulsiveField2 RealHandBase spring")
+    repulsive3_gripperbase_id = get_compiled_componentID(cache, "repulsiveField3 RealHandBase spring")
+
     return (LeftFingerTarget_coord_id, RightFingerTarget_coord_id, BaseTarget_coord_id, 
     LeftFingerRobotFurther_coord_id, RightFingerRobotFurther_coord_id, BaseRobotFurther_coord_id,
     RealRightFingerRobot_coord_id, RealLeftFingerRobot_coord_id, RealBaseRobot_coord_id,
     repulsiveField1_id, repulsiveField2_id, repulsiveField3_id,
     leftSpring_id, rightSpring_id, baseSpring_id, additionalLeftSpring_id, additionalRightSpring_id, additionalBaseSpring_id,
     positionDiff_id, damper_R_id, damper_L_id, damper_H_id,
-    leftDamper_coordDiff_id, rightDamper_coordDiff_id, baseDamper_coordDiff_id )
+    leftDamper_coordDiff_id, rightDamper_coordDiff_id, baseDamper_coordDiff_id,
+    repulsive1_middlepoint_id, repulsive2_middlepoint_id, repulsive3_middlepoint_id,
+    repulsive1_gripperbase_id, repulsive2_gripperbase_id, repulsive3_gripperbase_id)
 end
 
 function f_control(cache, target_positions, t, setup_ret, extra)
@@ -633,7 +669,9 @@ function f_control(cache, target_positions, t, setup_ret, extra)
     repulsiveField1_id, repulsiveField2_id, repulsiveField3_id,
     leftSpring_id, rightSpring_id, baseSpring_id, additionalLeftSpring_id, additionalRightSpring_id, additionalBaseSpring_id,
     positionDiff_id, damper_R_id, damper_L_id, damper_H_id,
-    leftDamper_coordDiff_id, rightDamper_coordDiff_id, baseDamper_coordDiff_id = setup_ret
+    leftDamper_coordDiff_id, rightDamper_coordDiff_id, baseDamper_coordDiff_id,
+    repulsive1_middlepoint_id, repulsive2_middlepoint_id, repulsive3_middlepoint_id,
+    repulsive1_gripperbase_id, repulsive2_gripperbase_id, repulsive3_gripperbase_id = setup_ret
 
     LeftFingerTargetPos = SVector(target_positions[1], target_positions[2], target_positions[3])
     cache[LeftFingerTarget_coord_id].coord_data.val[] = LeftFingerTargetPos
@@ -692,17 +730,54 @@ function f_control(cache, target_positions, t, setup_ret, extra)
     handPosition = SVector(target_positions[28], target_positions[29], target_positions[30])
     push!(HandPositions, handPosition)
 
+    force_leftmain = VMRobotControl._opspace_force(cache, cache[leftSpring_id])
+    push!(Force_leftspring_main, force_leftmain)
+    force_rightmain = VMRobotControl._opspace_force(cache, cache[rightSpring_id])
+    push!(Force_rightspring_main, force_rightmain)
+    force_basemain = VMRobotControl._opspace_force(cache, cache[baseSpring_id])
+    push!(Force_basespring_main, force_basemain)
+
+    force_leftadditional = VMRobotControl._opspace_force(cache, cache[additionalLeftSpring_id])
+    push!(Force_leftspring_additional, force_leftadditional)
+    force_rightadditional = VMRobotControl._opspace_force(cache, cache[additionalRightSpring_id])
+    push!(Force_rightspring_additional, force_rightadditional)
+    force_baseadditional = VMRobotControl._opspace_force(cache, cache[additionalBaseSpring_id])
+    push!(Force_basespring_additional, force_baseadditional)
+   
+    force_repulsive1mp = VMRobotControl._opspace_force(cache, cache[repulsive1_middlepoint_id])
+    push!(Force_repuslive1middlept, force_repulsive1mp)
+    force_repulsive2mp = VMRobotControl._opspace_force(cache, cache[repulsive2_middlepoint_id])
+    push!(Force_repuslive2middlept, force_repulsive2mp)
+    force_repulsive3mp = VMRobotControl._opspace_force(cache, cache[repulsive3_middlepoint_id])
+    push!(Force_repuslive3middlept, force_repulsive3mp)
+    force_repulsive1b = VMRobotControl._opspace_force(cache, cache[repulsive1_gripperbase_id])
+    push!(Force_repuslive1base, force_repulsive1b)
+    force_repulsive2b = VMRobotControl._opspace_force(cache, cache[repulsive2_gripperbase_id])
+    push!(Force_repuslive2base, force_repulsive2b)
+    force_repulsive3b = VMRobotControl._opspace_force(cache, cache[repulsive3_gripperbase_id])
+    push!(Force_repuslive3base, force_repulsive3b)
+
+    force_ldamper = VMRobotControl._opspace_force(cache, cache[damper_L_id])
+    push!(Force_leftdamper, force_ldamper)
+    force_rdamper = VMRobotControl._opspace_force(cache, cache[damper_R_id])
+    push!(Force_rightdamper, force_rdamper)
+    force_bdamper = VMRobotControl._opspace_force(cache, cache[damper_H_id])
+    push!(Force_basedamper, force_bdamper)
+
     currentTime = time()
     push!(time_vector, currentTime)
 
     # damping_val = max(norm(RightFingerRobot - RightFingerFromQuest), norm(BaseRobot - BaseFromQuest))
     damping_val = max(norm(RightFingerTargetPos - RightFingerFurtherRobot), norm(BaseTargetPos - BaseFurtherRobot))
+    push!(damping_input_for_tanh, damping_val)
     
     # new_damping = 7.0*tanh(500*damping_val) + 2.0*tanh(10*(damping_val-0.2)) + 2.0*tanh(10*(damping_val+0.2))
     new_damping = 2.0 + 7.0*tanh(10*damping_val)
+    push!(damping_after_tanh, new_damping)
+
     # new_damping = 2.0*tanh(20*damping_val)
 
-    if norm(handPosition) > 0.8 || handPosition[1] > 0.4
+    if norm(handPosition) > 0.8 || handPosition[1] > 1.0
         cache[leftSpring_id] = remake(cache[leftSpring_id]; stiffness=0.001)
         cache[rightSpring_id] = remake(cache[rightSpring_id]; stiffness=0.001)
         cache[baseSpring_id] = remake(cache[baseSpring_id]; stiffness=0.001)
