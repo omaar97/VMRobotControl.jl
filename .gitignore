@@ -6,3 +6,4 @@ Manifest.toml
 .vscode
 docs/build/*
 examples/*.jld2
+examples/UserStudy/*.jld2

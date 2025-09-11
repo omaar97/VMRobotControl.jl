@@ -21,8 +21,8 @@ using VMRobotControl:
 
 ROSPY_LISTEN_PORT = 25342
 
-SAVE_DATA = true
-FILE_NAME = "examples/17April_BananaObjTransExp.jld2"
+SAVE_DATA = false
+FILE_NAME = "examples/UserStudy/Subject18DefaultRobotBehaviorWithAR.jld2"
 
 const START = "START"
 const WARMUP_DONE = "WARMUP_DONE"
